@@ -39,11 +39,16 @@ for n = 1:size(vid_ads,3)
     immat(:,n) = vec(vid_ads(:,:,n));
 end
     
-rk = 20;
+rk = 1;    %Rank of bg
 [u,s,v] = svds(immat,rk);
 bgim = zeros(size(vid_ads,1),size(vid_ads,2));
 for n = 1:rk
     bgim = bgim + reshape(s(n,n)*u(:,n),[size(vid_ads,1),size(vid_ads,2)]);
+%     imagesc(reshape(s(n,n)*u(:,n),[size(vid_ads,1),size(vid_ads,2)]));
+%     axis image
+%     drawnow
+%     pause(1)
+    
 end
 
 vidbg = 0*vid_ads; 
@@ -51,7 +56,7 @@ vidbg = 0*vid_ads;
 for n = 1:size(vid_ads,3)
     set(0,'CurrentFigure',h1);
     vidbg(:,:,n) = vid_ads(:,:,n) - v(n)*bgim;
-    imagesc(vidbg(:,:,n))
+    imagesc(abs(vidbg(:,:,n)))
     title('bg removed')
     axis image
     colormap parula

@@ -1,19 +1,29 @@
 %y = imread('caustics.tif');
 %load('/Users/nick.antipa/Documents/Diffusers/Lensless/3D_calibration/GRIN_pupil_half_degree/Axial/calibration_5micron_20171109_111300/diffuser_miniscope_zstack_20171109.mat');
 
-xin = imread('caustics.tif');
+%xin = imread('caustics.tif');
+%xin = imread('
 %bgorig = bg_4x;
-bgorig = double(imread('~/Documents/Diffusers/Miniscope/bck_4x__H16_M12_S35.png'));
-bg_4x = bgorig(:,:,2);
+%bgorig = double(imread('~/Documents/Diffusers/Miniscope/bck_4x__H16_M12_S35.png'));
+ds = 4;
 
-xorig = double(xin(700:(700+size(bgorig,1)-1),1000:(1000+size(bgorig,2)-1)));
+bgorig = double(imread('/Users/nick.antipa/Documents/Diffusers/BigLensletScope/Calibration/bg_img_000000000_Default_130.tif'));
+if numel(size(bgorig)) ~= 2
+    bg_4x = bgorig(:,:,2);
+else
+    bg_4x = bgorig;
+end
+
+bg_4x = imresize(bg_4x,1/ds,'box');
+%xorig = double(xin(700:(700+size(bgorig,1)-1),1000:(1000+size(bgorig,2)-1)));
 %bgorig = bgorig/max(bgorig(:))*max(xorig(:))*.5;
 
 %y = (xorig+bgorig)*.9;
 b = bg_4x;
 %y = zstack(:,:,16);
-yin = double(imread('~/Documents/Diffusers/Miniscope/psf_4x__H16_M3_S47.png'));
-y = yin(:,:,2);
+%yin = double(imread('~/Documents/Diffusers/Miniscope/psf_4x__H16_M3_S47.png'));
+%y = imresize(yin(:,:,2),1/ds,'box');
+y = imresize(double(imread('/Users/nick.antipa/Documents/Diffusers/BigLensletScope/Calibration/img_000000000_Default_130.tif')),1/ds,'box');
 alpha = 3.4;
 x = 40*ones(size(y));
 gx = @(x,alpha)alpha*(alpha*(b+x)-y);
@@ -88,23 +98,63 @@ alpha1 = v;
 alpha2 = v;
 alpha =1;
 alpha3 = v;
-mu1 = .7
+mu1 = .5
 mu2 = .1
-mu3 = .7
-tau = 40000/2000;
+mu3 = .5
+tau = 40000/2000*6;
 f = [];
-resid_tol = 3e10;
-mu_inc = 1.5;
-mu_dec = 1.5;
+resid_tol = 1.5;
+mu_inc = 1.1;
+mu_dec = 1.1;
+% while n < niter
+%     n = n+1;
+%     alpha = sqrt(abs(sum(sum(v.*y))/sum(sum(v.*v))));
+%     %alpha = .75;
+%     uk = u;
+%     vk = v;
+%     wk = w;
+%     xk = x;
+%     u = soft(x + alpha1/mu1, tau/mu1);
+%     v = mu2*(b+x) - alpha2 + alpha*y;
+%     w = max(w+alpha3/mu3,0);
+%     x = ((mu1*u - alpha1 + mu2*(v-b) + alpha2 + mu3*w - alpha3)/(mu1+mu2+mu3));
+%     du = uk-u;
+%     ru = x-u;
+%     dv = vk - v;
+%     rv = v-b-x;
+%     dw = wk - w;
+%     rw = x-w;
+%     alpha1 = alpha1 + mu1*ru;
+%     alpha2 = alpha2 + mu2*rv;
+%     alpha3 = alpha3 + mu3*rw;
+%     [mu1, ~] = update_param(mu1,resid_tol,mu_inc,mu_dec,norm(ru,'fro'),norm(mu1*du,'fro'));
+%     [mu2, ~] = update_param(mu2,resid_tol,mu_inc,mu_dec,norm(rv,'fro'),norm(mu2*dv,'fro'));
+%     [mu3, ~] = update_param(mu3,resid_tol,mu_inc,mu_dec,norm(rw,'fro'),norm(mu3*dw,'fro'));
+% 
+%     f = cat(1,f,norm(alpha*(x+b) - y)^2);
+%     
+%     set(0,'CurrentFigure',h2)
+%     semilogy(f)
+%     fprintf('%.2f\t%.2f \t %.2f \t%.2f \t%i\n',f(end), norm(x-u,'fro'),norm(x+b-v,'fro'),norm(w-x,'fro'),alpha)
+%     drawnow
+%     
+%     set(0,'CurrentFigure',h1)
+%     imagesc(x)
+%     colormap parula
+%     axis image
+%     colorbar
+%     drawnow
+% end
 while n < niter
     n = n+1;
     alpha = sqrt(abs(sum(sum(v.*y))/sum(sum(v.*v))));
+    %alpha = .75;
     uk = u;
     vk = v;
     wk = w;
     xk = x;
-    u = soft(x + alpha1/mu1, tau/mu1);
-    v = mu2*(b+x) - alpha2 + alpha*y;
+    u = soft(x*alpha + alpha1/mu1*alpha, tau/mu1);
+    v = mu2*(b+alpha*x) - alpha2 + alpha*y;
     w = max(w+alpha3/mu3,0);
     x = ((mu1*u - alpha1 + mu2*(v-b) + alpha2 + mu3*w - alpha3)/(mu1+mu2+mu3));
     du = uk-u;
@@ -118,7 +168,7 @@ while n < niter
     alpha3 = alpha3 + mu3*rw;
     [mu1, ~] = update_param(mu1,resid_tol,mu_inc,mu_dec,norm(ru,'fro'),norm(mu1*du,'fro'));
     [mu2, ~] = update_param(mu2,resid_tol,mu_inc,mu_dec,norm(rv,'fro'),norm(mu2*dv,'fro'));
-    [mu3, ~] = update_param(mu1,resid_tol,mu_inc,mu_dec,norm(rw,'fro'),norm(mu3*dw,'fro'));
+    [mu3, ~] = update_param(mu3,resid_tol,mu_inc,mu_dec,norm(rw,'fro'),norm(mu3*dw,'fro'));
 
     f = cat(1,f,norm(alpha*(x+b) - y)^2);
     
@@ -129,6 +179,7 @@ while n < niter
     
     set(0,'CurrentFigure',h1)
     imagesc(x)
+    colormap parula
     axis image
     colorbar
     drawnow
