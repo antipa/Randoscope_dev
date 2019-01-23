@@ -100,7 +100,7 @@ def poissonsampling_circular(model):
 def make_lenslet_tf(model):
         T = tf.zeros([model.samples[0],model.samples[1]])
         for n in range(model.Nlenslets):
-            sph1 = tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm-
+            sph1 = model.lenslet_offset+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm-
                                                                           model.xpos[n])) - tf.square((model.ygm-model.ypos[n]))))-tf.real(tf.sqrt(tf.square(model.rlist[n]
                                                                           )-tf.square(model.mean_lenslet_CA)))
             T = tf.maximum(T,sph1)
@@ -108,7 +108,7 @@ def make_lenslet_tf(model):
         return T,aper
     
 def crop2d(x, crop_size):
-    cstart = (x.shape - crop_size)//2
+    cstart = (np.array(x.shape) - crop_size)//2  #there is an NP here!
     return x[cstart[0]:cstart[0]+crop_size[0], cstart[1]:cstart[1]+crop_size[1]]  
 
 
@@ -116,6 +116,83 @@ def tf_exp(arg):
     U_in_r = tf.cos(arg)
     U_in_i = tf.sin(arg)
     return tf.complex(U_in_r,U_in_i)
+    
+def tf_fftshift(spectrum):
+    spec_in=fftshift(spectrum,axis=0)
+    spec_out=fftshift(spec_in,axis=1)
+    return spec_out
+    
+def fftshift(spectrum, axis=-1):
+  try: 
+    shape = spectrum.shape[axis].value
+  except:
+    shape = None
+  if shape is None:
+    shape = tf.shape(spectrum)[axis]
+  # Match NumPy's behavior for odd-length input. The number of items to roll is
+  # truncated downwards.
+  b_size = shape // 2
+  a_size = shape - b_size
+  a, b = tf.split(spectrum, [a_size, b_size], axis=axis)
+  return tf.concat([b, a], axis=axis)
+
+def pad_frac_tf(x, padfrac=0):
+    pads=np.ceil(tf.to_float(tf.shape(x))*padfrac).astype('int')
+    paddings = tf.constant([[pads[0], pads[0]], [pads[1], pads[1]]])
+    return tf.pad(x,paddings,'constant')
+
+def propagate_field_freq_tf(model,U,padfrac=0):
+    if padfrac != 0:
+        shape_orig = np.shape(U)
+        U = pad_frac_tf(U, padfrac)
+        Fx, Fy = tf.meshgrid(tf.lin_space(tf.reduce_min(model.Fx), tf.reduce_max(model.Fx), U.shape[0]), tf.lin_space(tf.reduce_min(model.Fy), tf.reduce_max(model.Fy), U.shape[1]))
+        Fxn=Fx
+        Fyn=Fy
+    else:
+        Fxn=model.Fx
+        Fyn=model.Fy
+    Uf = tf_fftshift(tf.fft2d(tf_fftshift(U)))
+    Hf = tf_exp(2.*np.pi*model.t/model.lam * tf.sqrt(1-tf.square(model.lam*Fxn) - tf.square(model.lam*Fyn)))
+    Up = tf_fftshift(tf.ifft2d(tf_fftshift(Uf*Hf)))
+    if padfrac != 0:
+        Up = crop2d(Up, shape_orig)
+    return Up
+
+def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0):  #check negatives in exponents
+    # Inputs:
+    # surface: single surface thickness function, units: mm
+    # ior : index of refraction of bulk material
+    # t : thickness of surface (i.e. distance to output plane)
+    # z_obj : distance from object plane. +Inf means object at infinity
+    # object_def : 'angle' for angular field definition, 'obj_height' for finite
+    # field : tuple (x,y) wavefront field definition. (0,0) is on-axis. Interpreted in context of object_def
+    # CA: radius of clear aperture in mm
+    # pupil_aberration: additional pupil phase, in radians!
+    # lmbda: wavelength in mm
+    # xg and yg are the spatial grid (pixel spacing in mm)
+    # Fx : frequency grid in 1/mm
+    # Fy : same as Fx  
+
+    if obj_def is 'angle':
+        ramp_coeff_x = -tf.tan(model.field_list[0]*np.pi/180.)
+        ramp_coeff_y = -tf.tan(model.field_list[1]*np.pi/180.)
+        ramp = model.xgm*ramp_coeff_x + model.ygm*ramp_coeff_y
+        if z_dis is 'inf':
+            U_in = tf_exp(model.k*(ramp))
+        else:
+            U_in = tf_exp(model.k*(z_dis -z_dis*tf.sqrt(1+tf.square(model.ygm/z_dis)+tf.square(model.xgm/z_dis)) + ramp)) #negative already included
+    
+    elif obj_def is 'obj_height':
+        if z_dis is 'inf':
+            raise Exception('cannot use obj_height and object at infinity')
+        else:
+            U_in = tf_exp(1*-z_dis*model.k*tf.sqrt(1-tf.square((model.xgm-model.field_list[0])/z_dis) - tf.square((model.ygm-model.field_list[1])/z_dis)))
+    
+    U_out = U_in * tf_exp((model.k*(model.ior-1)*T + pupil_phase))
+    amp = tf.to_float(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA)
+    U_prop = propagate_field_freq_tf(model, tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp), prop_pad)    
+    psf = tf.square(tf.abs(U_prop))
+    return(psf/tf.reduce_sum(psf)) #DO WE NEED TO DO THIS????
     
 
 
