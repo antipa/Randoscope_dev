@@ -100,7 +100,7 @@ def poissonsampling_circular(model):
 def make_lenslet_tf(model):
         T = tf.zeros([model.samples[0],model.samples[1]])
         for n in range(model.Nlenslets):
-            sph1 = model.lenslet_offset+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm-
+            sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm-
                                                                           model.xpos[n])) - tf.square((model.ygm-model.ypos[n]))))-tf.real(tf.sqrt(tf.square(model.rlist[n]
                                                                           )-tf.square(model.mean_lenslet_CA)))
             T = tf.maximum(T,sph1)
