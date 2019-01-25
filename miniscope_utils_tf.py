@@ -235,3 +235,22 @@ def propTF(u1,L,lam,z):
     U2=H*U1;
     u2=np.fft.ifftshift(np.fft.ifft2(U2))
     return u2
+
+def remove_nan_gradients(grads):
+   # Get rid of NaN gradients
+   for g in range(0,len(grads)):
+       if np.any(tf.is_nan(grads[g])):
+           new_grad = tf.where(tf.is_nan(grads[g]), tf.zeros_like(grads[g]), grads[g])
+           grads[g] = new_grad
+   return grads
+
+def project_to_aper_keras(model):
+    lenslets_dist = tf.sqrt(tf.square(model.xpos) + tf.square(model.ypos))
+   # print(lenslets_dist)
+    dist_new = tf.minimum(lenslets_dist, model.CA)
+    
+    th = tf.atan2(model.ypos, model.xpos)
+    x_new = dist_new * tf.cos(th)
+    y_new = dist_new * tf.sin(th)
+    model.xpos.assign(x_new)
+    model.ypos.assign(y_new)
