@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow.contrib.eager as tfe
 def make_lenslet_surface(Xlist, Ylist, Rlist, xrng, yrng, samples,aperR,r_lenslet):
     # Takes in Xlist, Ylist and Rlist: floating point center and radius values for each lenslet
     # xrng and yrng: x and y range (tuple) over which to define grid
@@ -239,7 +240,6 @@ def propTF(u1,L,lam,z):
 def remove_nan_gradients(grads):
    # Get rid of NaN gradients
    for g in range(0,len(grads)):
-       if np.any(tf.is_nan(grads[g])):
            new_grad = tf.where(tf.is_nan(grads[g]), tf.zeros_like(grads[g]), grads[g])
            grads[g] = new_grad
    return grads

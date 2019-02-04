@@ -1,0 +1,217 @@
+import tensorflow as tf
+import tensorflow.contrib.eager as tfe
+import numpy as np
+import scipy.special as scsp
+from miniscope_utils_tf import *
+
+class Model(tf.keras.Model):
+    def __init__(self, zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp'):   #'log_sum_exp'
+        super(Model, self).__init__()
+        target_option = 'airy'
+        self.samples = (768,768)   #Grid for PSF simulation
+
+        # min and max lenslet focal lengths in mm
+        self.fmin = 6.
+        self.fmax = 20.
+        self.ior = 1.56
+        self.lam=510e-6
+        
+        # Min and max lenslet radii
+        self.Rmin = self.fmin*(self.ior-1.)
+        self.Rmax = self.fmax*(self.ior-1.)
+
+        # Convert to curvatures
+        self.cmin = 1/self.Rmax
+        self.cmax = 1/self.Rmin
+        self.xgrng = np.array((-1.8, 1.8)).astype('float32')    #Range, in mm, of grid of the whole plane (not just grin)
+        self.ygrng = np.array((-1.8, 1.8)).astype('float32')
+
+        self.t = 10.    #Distance to sensor from mask in mm
+
+        #Compute depth range of virtual image that mask sees (this is assuming an objective is doing some magnification)
+
+        self.zmin_virtual = 1./(1./self.t - 1./self.fmin)
+        self.zmax_virtual = 1./(1./self.t - 1./self.fmax)
+        self.CA = .9; #semi clear aperature of GRIN
+        self.mean_lenslet_CA = .16 #average lenslest semi clear aperture in mm. 
+            
+        #Getting number of lenslets and z planes needed as well as defocus list
+        self.ps = (self.xgrng[1] - self.xgrng[0])/self.samples[0]
+        self.Nlenslets=np.int(np.floor((self.CA**2)/(self.mean_lenslet_CA**2)))
+        self.Nz = np.ceil(np.sqrt(self.Nlenslets*2)).astype('int') #number of Zplanes 
+        self.zsampling = zsampling
+        self.grid_z_planes=8
+        #self.defocus_grid=  1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.grid_z_planes)) #mm or dioptres
+
+        #if self.zsampling is 'fixed':
+        #    self.defocus_list = 1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)) #mm or dioptres
+            
+        self.min_offset= -10e-3
+        self.max_offset= 10e-3
+        self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
+        #initializing the x and y positions
+        [xpos,ypos, rlist]=poissonsampling_circular(self)
+        
+        self.min_r= self.Rmin
+        self.max_r= self.Rmax
+        self.rlist = tfe.Variable(rlist,name='rlist', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_r, self.max_r))
+        #self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float32, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
+        #self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float32, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
+        self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float32)
+        self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float32)
+        #parameters for making the lenslet surface
+        self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=tf.float32)
+        self.xg=tf.constant(np.linspace(self.xgrng[0], self.xgrng[1], self.samples[1]),dtype=tf.float32)
+        self.px=tf.constant(self.xg[1] - self.xg[0],tf.float32)
+        self.py=tf.constant(self.yg[1] - self.yg[0],tf.float32)
+        self.xgm, self.ygm = tf.meshgrid(self.xg,self.yg)
+
+        #PSF generation parameters
+        self.lam=tf.constant(510.*10.**(-6.),dtype=tf.float32)
+        self.k = np.pi*2./self.lam
+        
+        fx = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[1]),dtype=tf.float32)
+        fy = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[0]),dtype=tf.float32)
+        self.Fx,self.Fy = tf.meshgrid(fx,fy)
+        self.field_list = tf.constant(np.array((0., 0.)).astype('float32'))
+        
+        self.corr_pad_frac = .5
+        self.target_res = .010# micron   
+        #         sig = 2*self.target_res/(2.355) * 1e-3
+        #         real_target = tf.exp(-(tf.square(self.xgm) + tf.square(self.ygm))/(2*tf.square(sig)))
+        #         real_target = pad_frac_tf(real_target / tf.reduce_max(real_target), self.corr_pad_frac)
+        #         self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(real_target), 0.)))
+
+        D=1.22*self.lam/(tf.sin(2*tf.atan(self.target_res/(2*self.t))))  #0.514 for half_max, 1.22 for first zero. 
+        x_airy=self.k*D*tf.sin(tf.atan(self.xgm/self.t))/2
+        y_airy=self.k*D*tf.sin(tf.atan(self.ygm/self.t))/2
+        #Xa, Ya = tf.meshgrid(x_airy, y_airy)
+        Ra = tf.sqrt(tf.square(x_airy) + tf.square(y_airy))
+
+        #         self.target_airy=((2*scsp.j1(x_airy)/x_airy)**2) *((2*scsp.j1(y_airy)/y_airy)**2)
+        self.target_airy = (2*scsp.j1(Ra)/Ra)**2
+        self.target_airy_pad = pad_frac_tf(self.target_airy / tf.reduce_max(self.target_airy), self.corr_pad_frac)
+
+        sig_aprox=0.42*self.lam*self.t/D
+        self.airy_aprox_target = tf.exp(-(tf.square(self.xgm) + tf.square(self.ygm))/(2*tf.square(sig_aprox)))
+
+        self.airy_aprox_pad = pad_frac_tf(self.airy_aprox_target / tf.reduce_max(self.airy_aprox_target), self.corr_pad_frac)
+
+        if target_option=='airy':
+            self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.target_airy_pad), 0.)))
+        elif target_option=='gaussian':
+            self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.airy_aprox_pad), 0.)))
+        
+        # Set regularization. Problem will be treated as l1 of spectral error at each depth + tau * l_inf(cross_corr)
+        self.cross_corr_norm = cross_corr_norm
+        self.logsumexp_param = tf.constant(1e-3, tf.float32)   #lower is better l-infinity approximation, higher is worse but smoother
+        self.tau = tf.constant(100,tf.float32)    #Extra weight for cross correlation terms
+        
+        
+        self.ignore_dc = True   #Ignore DC in autocorrelations when computing frequency domain loss
+        dc_mask = np.ones_like(self.target_F.numpy())  #Mask for DC. Set to zero anywhere we want to ignore loss computation of power spectrum
+        dc_mask[:3,:3] = 0
+        dc_mask[-2:,:1] = 0
+        dc_mask[:1,-2:] = 0
+        dc_mask[-2:,-2:]= 0
+        self.dc_mask = tf.constant(dc_mask,tf.float32)
+        
+        
+    def call(self, defocus_list):
+
+        if np.size(defocus_list) == 1:
+            defocus_list = 1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)) #mm or dioptres
+            
+            #if self.zsampling is "uniform_random":
+            #    self.defocus_list = 1/np.sort(np.random.uniform(low = 1/self.zmin_virtual, high = 1./self.zmax_virtual, size = (self.Nz,)))
+            #
+            #elif self.zsampling is "random_grid":
+            #    testint = random.sample(range(0,model.grid_z_planes), model.Nz)
+            #    self.defocus_list = self.defocus_grid[testint]
+        #else:
+        #    self.defocus_list = grid_opt
+            
+        T,aper=make_lenslet_tf(self) #offset added
+        # Get psf stack
+        zstack = self.gen_psf_stack(T, aper, 0.5, defocus_list)
+        
+        psf_spect = self.gen_stack_spectrum(zstack)
+
+        normsize=tf.to_float(tf.shape(psf_spect)[0]*tf.shape(psf_spect)[1])
+        
+        Rmat_tf_diag = []
+        Rmat_tf_off_diag = []
+        #calculating Xcorr
+        
+        
+        # This now computes diagonals and off-diagonals separately then concatenates them. this makes is easier to "find" the diagonals/off diagonals for separate treatment  later.
+        for z1 in range(self.Nz):
+            for z2 in range(z1, self.Nz):
+                Fcorr = tf.conj(psf_spect[z1])*psf_spect[z2]
+                if z1 == z2:
+                    # Difference between autocorrelation and target bandwidth
+                    if self.ignore_dc:  
+                        # Remove DC (assume no fftshift!)
+
+                        Rmat_tf_diag.append(tf.reduce_sum(self.dc_mask * (tf.square((tf.abs(Fcorr) - self.target_F)/normsize))))
+                    else:
+                        Rmat_tf_diag.append(tf.reduce_sum(tf.square((tf.abs(Fcorr) - self.target_F)/normsize)))
+                    
+                else:
+                    # Target is zero for cross correlation
+                    if self.cross_corr_norm is 'l2':
+                        Rmat_tf_off_diag.append( self.tau * tf.reduce_sum(tf.square(tf.abs(Fcorr)/normsize)))  #changed to one norm
+                    elif self.cross_corr_norm is 'log_sum_exp':   
+                        # Implementation of eq. 7 from http://users.cecs.anu.edu.au/~yuchao/files/SmoothApproximationforL-infinityNorm.pdf
+                        ccorr = tf.abs(tf.ifft2d(Fcorr))
+                        Rmat_tf_off_diag.append(2 * self.tau * self.logsumexp_param * tf.reduce_logsumexp(tf.square(ccorr)/self.logsumexp_param) )
+                        
+                    elif self.cross_corr_norm is 'inf':
+                        Rmat_tf_off_diag.append( self.tau * tf.reduce_max(tf.abs(tf.ifft2d(Fcorr))))
+        Rmat_tf = tf.concat([Rmat_tf_diag, Rmat_tf_off_diag],0)
+                        
+                        
+
+        #Rmat=tf.reshape(Rmat_tf,(self.Nz,self.Nz))
+            
+        return Rmat_tf #note this returns int data type!! vector not matrix. This is also my loss!
+    
+    def gen_correlation_stack(self,psf_spect):
+        Fcorr=[]
+        for z1 in range(self.Nz):
+            for z2 in range(self.Nz):
+                Fcorr.append(tf_fftshift(tf.ifft2d(tf.conj(psf_spect[z1])*psf_spect[z2])))
+
+        return Fcorr
+        
+    def gen_psf_stack(self, T, aper, prop_pad, zplanes=0):
+        zstack = []
+        
+        if np.size(zplanes) == 1:
+            zplanes = 1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)) #mm or dioptres
+            
+        #if np.size(zplanes_opt) == 0:
+        #    zplanes = self.defocus_list
+        #else:
+        #    zplanes = zplanes_opt
+            
+        for defocus in zplanes:
+            zstack.append(gen_psf_ag_tf(T,self,defocus,'angle',0., prop_pad))
+        return zstack
+    
+    def gen_stack_spectrum(self, zstack):
+                #Padding for fft
+        psf_pad=[]
+#         Rmat = np.zeros((self.Nz,self.Nz))
+
+        for z1 in range(self.Nz):
+            psf_pad.append(pad_frac_tf(zstack[z1],self.corr_pad_frac)) #how much to pad? 
+
+        psf_spect=[]
+        
+        #Getting spectrum
+
+        for z1 in range(self.Nz):
+            psf_spect.append(tf.fft2d(tf.complex(tf_fftshift(psf_pad[z1]),tf.constant(0.,dtype = tf.float32))))
+
+        return psf_spect
