@@ -5,7 +5,7 @@ import scipy.special as scsp
 from miniscope_utils_tf import *
 
 class Model(tf.keras.Model):
-    def __init__(self, zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp'):   #'log_sum_exp'
+    def __init__(self, zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False):   #'log_sum_exp'
         super(Model, self).__init__()
         target_option = 'airy'
         self.samples = (768,768)   #Grid for PSF simulation
@@ -49,6 +49,7 @@ class Model(tf.keras.Model):
         self.min_offset= -10e-3
         self.max_offset= 10e-3
         self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
+        #self.lenslet_offset=tf.zeros(self.Nlenslets)
         #initializing the x and y positions
         [xpos,ypos, rlist]=poissonsampling_circular(self)
         
@@ -65,6 +66,11 @@ class Model(tf.keras.Model):
         self.px=tf.constant(self.xg[1] - self.xg[0],tf.float32)
         self.py=tf.constant(self.yg[1] - self.yg[0],tf.float32)
         self.xgm, self.ygm = tf.meshgrid(self.xg,self.yg)
+
+        
+        # Normalized coordinates
+        self.xnorm =  self.xgm/np.max(self.xgm)
+        self.ynorm =  self.ygm/np.max(self.ygm)
 
         #PSF generation parameters
         self.lam=tf.constant(510.*10.**(-6.),dtype=tf.float32)
@@ -116,6 +122,21 @@ class Model(tf.keras.Model):
         dc_mask[-2:,-2:]= 0
         self.dc_mask = tf.constant(dc_mask,tf.float32)
         
+        # Use Zernike aberrations with random initialization 
+        if aberrations == True:
+            zern_init = []
+            for i in range(self.Nlenslets):
+                #zern_list.append([0,0,0,0,0,0,0,0,0,0])
+
+                aberrations = np.zeros(2)
+                aberrations[0]  = np.random.uniform(low=0, high = .02)
+                aberrations[1]  = np.random.uniform(low=0, high = .02)
+                zern_init.append(aberrations)
+    
+            self.zernlist = tf.Variable(zern_init, dtype='float32', name='zernlist')
+        else:
+            self.zernlist = 0
+        
         
     def call(self, defocus_list):
 
@@ -131,7 +152,8 @@ class Model(tf.keras.Model):
         #else:
         #    self.defocus_list = grid_opt
             
-        T,aper=make_lenslet_tf(self) #offset added
+        T, aper, _ = make_lenslet_tf_zern(self) 
+        #T,aper=make_lenslet_tf(self) #offset added
         # Get psf stack
         zstack = self.gen_psf_stack(T, aper, 0.5, defocus_list)
         
