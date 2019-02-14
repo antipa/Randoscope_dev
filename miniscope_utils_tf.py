@@ -114,6 +114,7 @@ def make_lenslet_tf_zern(model):
                                           )-tf.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
         
         if np.shape(model.zernlist) != ():  # Including Zernike aberrations 
+            # change to normalize by CA
             Z = zernikecartesian(model.zernlist[n],  model.xnorm - model.xpos[n]/np.max(model.xgm)  ,model.ynorm - model.ypos[n]/np.max(model.xgm))
             
             #r = 1. # Not sure about this
@@ -305,12 +306,12 @@ def zernikecartesian(coefficient,x,y):
     Z = coefficient
     #Z = [0]+coefficient
     r = tf.sqrt(tf.square(x) + tf.square(y))
-    #Z1  =  Z[0]  * 1
-    #Z2  =  Z[1]  * 2*x
-    #Z3  =  Z[2]  * 2*y
+    Z1  =  Z[0]
+    Z2  =  Z[1]  * 2.*x
+    Z3  =  Z[2]  * 2.*y
     #Z4  =  Z[0]  * tf.sqrt(3.)*(2.*tf.square(r)-1.)
-    Z5  =  Z[0]  * 2*tf.sqrt(6.)*x*y
-    Z6  =  Z[1]  * tf.sqrt(6.)*(x**2-y**2)
+    Z5  =  Z[3]  * 2.*tf.sqrt(6.)*x*y
+    Z6  =  Z[4]  * tf.sqrt(6.)*(x**2-y**2)
     #Z7  =  Z[2]  * tf.sqrt(8.)*y*(3*r**2-2)
     #Z8  =  Z[3]  * tf.sqrt(8.)*x*(3*r**2-2)
     #Z9  =  Z[9]  * tf.sqrt(8.)*y*(3*x**2-y**2)
@@ -342,7 +343,7 @@ def zernikecartesian(coefficient,x,y):
     #Z35 =  Z[35] * (8*x**2*y*(3*r**4-16*x**2*y**2)+4*y*(x**2-y**2)*(r**4-16*x**2*y**2))
     #Z36 =  Z[36] * (4*x*(x**2-y**2)*(r**4-16*x**2*y**2)-8*x*y**2*(3*r**4-16*x**2*y**2))
     #Z37 =  Z[37] * 3*(70*r**8-140*r**6+90*r**4-20*r**2+1)
-    ZW = Z5 + Z6 #+ Z7+ Z8
+    ZW = Z1 + Z2 + Z3 + Z5 + Z6 #+ Z7+ Z8
     #ZW =     Z1 + Z2 +  Z3+  Z4+  Z5+  Z6#+  #Z7+  Z8+  Z9+ Z10
     #+ Z11+ Z12+ Z13+ Z14+ Z15+ Z16+ Z17+ Z18+ Z19+ \
             #Z20+ Z21+ Z22+ Z23+ Z24+ Z25+ Z26+ Z27+ Z28+ Z29+ \

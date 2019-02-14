@@ -41,6 +41,8 @@ class Model(tf.keras.Model):
         self.Nz = np.ceil(np.sqrt(self.Nlenslets*2)).astype('int') #number of Zplanes 
         self.zsampling = zsampling
         self.grid_z_planes=8
+        
+        self.numzern = 5
         #self.defocus_grid=  1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.grid_z_planes)) #mm or dioptres
 
         #if self.zsampling is 'fixed':
@@ -48,8 +50,8 @@ class Model(tf.keras.Model):
             
         self.min_offset= -10e-3
         self.max_offset= 10e-3
-        self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
-        #self.lenslet_offset=tf.zeros(self.Nlenslets)
+        #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
+        self.lenslet_offset=tf.zeros(self.Nlenslets)
         #initializing the x and y positions
         [xpos,ypos, rlist]=poissonsampling_circular(self)
         
@@ -128,9 +130,10 @@ class Model(tf.keras.Model):
             for i in range(self.Nlenslets):
                 #zern_list.append([0,0,0,0,0,0,0,0,0,0])
 
-                aberrations = np.zeros(2)
-                aberrations[0]  = np.random.uniform(low=0, high = .02)
-                aberrations[1]  = np.random.uniform(low=0, high = .02)
+                aberrations = np.zeros(self.numzern)
+                #aberrations = np.random.uniform(low=0, high = .02, size = (5))
+                #aberrations[0]  = np.random.uniform(low=0, high = .02)
+                #aberrations[1]  = np.random.uniform(low=0, high = .02)
                 zern_init.append(aberrations)
     
             self.zernlist = tf.Variable(zern_init, dtype='float32', name='zernlist')
