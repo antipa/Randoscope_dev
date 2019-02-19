@@ -14,7 +14,7 @@ class Model(tf.keras.Model):
         self.samples = (512,512)  #Grid for PSF simulation
         
         self.lam=510e-6
-        file=scipy.io.loadmat('GrinAberrations.mat')
+        file=scipy.io.loadmat('/media/hongdata/Kristina/MinicopeData/GrinAberrations.mat')
         GrinAber=file['GrinAberrations']
         self.Grin=[]
         for i in range(len(GrinAber)):
