@@ -110,7 +110,7 @@ def make_lenslet_tf_zern(model):
         T_orig = []
     
     for n in range(model.Nlenslets):
-        sph1 = tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm- model.xpos[n]))- tf.square((model.ygm-model.ypos[n])))
+        sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm- model.xpos[n]))- tf.square((model.ygm-model.ypos[n])))
                                           )-tf.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
         
         if np.shape(model.zernlist) != ():  # Including Zernike aberrations 
@@ -119,13 +119,13 @@ def make_lenslet_tf_zern(model):
             
             #r = 1. # Not sure about this
             #Z[(model.xnorm  - model.xpos[n]/np.max(model.xgm) )**2+(model.ynorm - model.ypos[n]/np.max(model.xgm))**2>r**2]=0 # Crop to be a circle
-            sph2 = model.lenslet_offset[n]+ sph1 + Z
+            sph2 = sph1 + Z
             
             
-            T_orig = tf.maximum(T_orig,sph1 + model.lenslet_offset[n])
+            T_orig = tf.maximum(T_orig,sph1)
             T = tf.maximum(T,sph2)
         else:
-            T = tf.maximum(T,sph1 + model.lenslet_offset[n])
+            T = tf.maximum(T,sph1)
             
         
     aper = tf.sqrt(model.xgm**2+model.ygm**2) <= model.CA
@@ -193,7 +193,7 @@ def propagate_field_freq_tf(model,U,padfrac=0):
         Up = crop2d(Up, shape_orig)
     return Up
 
-def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0):  #check negatives in exponents
+def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0):  #check negatives in exponents
     # Inputs:
     # surface: single surface thickness function, units: mm
     # ior : index of refraction of bulk material
@@ -215,7 +215,7 @@ def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0):  #check 
         if z_dis is 'inf':
             U_in = tf_exp(model.k*(ramp))
         else:
-            U_in = tf_exp(model.k*(z_dis -z_dis*tf.sqrt(1+tf.square(model.ygm/z_dis)+tf.square(model.xgm/z_dis)) + ramp)) #negative already included
+            U_in = tf_exp(model.k*(Grin+z_dis -z_dis*tf.sqrt(1+tf.square(model.ygm/z_dis)+tf.square(model.xgm/z_dis)) + ramp)) #negative already included
     
     elif obj_def is 'obj_height':
         if z_dis is 'inf':
@@ -281,7 +281,7 @@ def remove_nan_gradients(grads):
 def project_to_aper_keras(model):
     lenslets_dist = tf.sqrt(tf.square(model.xpos) + tf.square(model.ypos))
    # print(lenslets_dist)
-    dist_new = tf.minimum(lenslets_dist, model.CA)
+    dist_new = tf.minimum(lenslets_dist, model.CA-model.mean_lenslet_CA-tf.sqrt(2*model.rlist*model.lenslet_offset-tf.square(model.lenslet_offset)))
     
     th = tf.atan2(model.ypos, model.xpos)
     x_new = dist_new * tf.cos(th)
@@ -306,16 +306,16 @@ def zernikecartesian(coefficient,x,y):
     Z = coefficient
     #Z = [0]+coefficient
     r = tf.sqrt(tf.square(x) + tf.square(y))
-    Z1  =  Z[0]
-    Z2  =  Z[1]  * 2.*x
-    Z3  =  Z[2]  * 2.*y
-    #Z4  =  Z[0]  * tf.sqrt(3.)*(2.*tf.square(r)-1.)
-    Z5  =  Z[3]  * 2.*tf.sqrt(6.)*x*y
-    Z6  =  Z[4]  * tf.sqrt(6.)*(x**2-y**2)
-    #Z7  =  Z[2]  * tf.sqrt(8.)*y*(3*r**2-2)
-    #Z8  =  Z[3]  * tf.sqrt(8.)*x*(3*r**2-2)
-    #Z9  =  Z[9]  * tf.sqrt(8.)*y*(3*x**2-y**2)
-    #Z10 =  Z[10] * tf.sqrt(8.)*x*(x**2-3*y**2)
+    #Z1  =  Z[0]
+   # Z2  =  Z[1]  * 2.*x
+   # Z3  =  Z[2]  * 2.*y
+    #Z4  =  Z[1]  * tf.sqrt(3.)*(2.*tf.square(r)-1.)
+    Z5  =  Z[0]  * 2.*tf.sqrt(6.)*x*y
+    Z6  =  Z[1]  * tf.sqrt(6.)*(x**2-y**2)
+    #Z7  =  Z[4]  * tf.sqrt(8.)*y*(3*r**2-2)
+    #Z8  =  Z[5]  * tf.sqrt(8.)*x*(3*r**2-2)
+    #Z9  =  Z[6]  * tf.sqrt(8.)*y*(3*x**2-y**2)
+    #Z10 =  Z[7] * tf.sqrt(8.)*x*(x**2-3*y**2)
     #Z11 =  Z[11] * __sqrt__(5)*(6*r**4-6*r**2+1)
     #Z12 =  Z[12] * __sqrt__(10)*(x**2-y**2)*(4*r**2-3)
     #Z13 =  Z[13] * 2*__sqrt__(10)*x*y*(4*r**2-3)
@@ -343,7 +343,7 @@ def zernikecartesian(coefficient,x,y):
     #Z35 =  Z[35] * (8*x**2*y*(3*r**4-16*x**2*y**2)+4*y*(x**2-y**2)*(r**4-16*x**2*y**2))
     #Z36 =  Z[36] * (4*x*(x**2-y**2)*(r**4-16*x**2*y**2)-8*x*y**2*(3*r**4-16*x**2*y**2))
     #Z37 =  Z[37] * 3*(70*r**8-140*r**6+90*r**4-20*r**2+1)
-    ZW = Z1 + Z2 + Z3 + Z5 + Z6 #+ Z7+ Z8
+    ZW = Z5+Z6  
     #ZW =     Z1 + Z2 +  Z3+  Z4+  Z5+  Z6#+  #Z7+  Z8+  Z9+ Z10
     #+ Z11+ Z12+ Z13+ Z14+ Z15+ Z16+ Z17+ Z18+ Z19+ \
             #Z20+ Z21+ Z22+ Z23+ Z24+ Z25+ Z26+ Z27+ Z28+ Z29+ \
