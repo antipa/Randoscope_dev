@@ -8,7 +8,7 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber=[]):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber=[], zernikes = []):   #'log_sum_exp'
         super(Model, self).__init__()
         target_option = 'airy'
         #self.samples = (512,512)  #Grid for PSF simulation
@@ -54,7 +54,7 @@ class Model(tf.keras.Model):
         self.zsampling = zsampling
         self.grid_z_planes=20
         
-        self.numzern = 3
+
         #self.defocus_grid=  1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.grid_z_planes)) #mm or dioptres
 
         #if self.zsampling is 'fixed':
@@ -140,15 +140,14 @@ class Model(tf.keras.Model):
         self.dc_mask = tf.constant(dc_mask,tf.float32)
         
         # Use Zernike aberrations with random initialization 
+        # Zernike 
+        self.zernikes = zernikes
+        self.numzern = len(zernikes)
+        
         if aberrations == True:
             zern_init = []
             for i in range(self.Nlenslets):
-                #zern_list.append([0,0,0,0,0,0,0,0,0,0])
-
                 aberrations = np.zeros(self.numzern)
-                #aberrations = np.random.uniform(low=0, high = .02, size = (5))
-                #aberrations[0]  = np.random.uniform(low=0, high = .02)
-                #aberrations[1]  = np.random.uniform(low=0, high = .02)
                 zern_init.append(aberrations)
     
             self.zernlist = tf.Variable(zern_init, dtype='float32', name='zernlist')

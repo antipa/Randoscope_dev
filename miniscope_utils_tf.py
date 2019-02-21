@@ -115,7 +115,10 @@ def make_lenslet_tf_zern(model):
         
         if np.shape(model.zernlist) != ():  # Including Zernike aberrations 
             # change to normalize by CA
-            Z = zernikecartesian(model.zernlist[n],  model.xnorm - model.xpos[n]/np.max(model.xgm)  ,model.ynorm - model.ypos[n]/np.max(model.xgm))
+            #Z = zernikecartesian(model.zernlist[n],  model.xnorm - model.xpos[n]/np.max(model.xgm)  ,model.ynorm - model.ypos[n]/np.max(model.xgm))
+            x_coord = model.xnorm - model.xpos[n]/np.max(model.xgm)
+            y_coord = model.ynorm - model.ypos[n]/np.max(model.xgm)
+            Z =  zernike_evaluate(model.zernlist[n], model.zernikes, x_coord, y_coord)
             
             #r = 1. # Not sure about this
             #Z[(model.xnorm  - model.xpos[n]/np.max(model.xgm) )**2+(model.ynorm - model.ypos[n]/np.max(model.xgm))**2>r**2]=0 # Crop to be a circle
@@ -369,65 +372,28 @@ def find_best_initialization(model, num_trials = 2000, save_results =False):
         scipy.io.savemat('/media/hongdata/Kristina/MiniscopeData/best_init.mat', dict_best)
         scipy.io.savemat('/media/hongdata/Kristina/MiniscopeData/worst_init.mat', dict_worst)
 
-        
-def zernikecartesian(coefficient,x,y):
-    """
-    ------------------------------------------------
-    __zernikecartesian__(coefficient,x,y):
-
-    Return combined aberration
-
-    Zernike Polynomials Caculation in Cartesian coordinates
-
-    coefficient: Zernike Polynomials Coefficient from input
-    x: x in Cartesian coordinates
-    y: y in Cartesian coordinates
-    ------------------------------------------------
-    """
-    Z = coefficient
-    #Z = [0]+coefficient
+       
+    
+def zernike_evaluate(coefficients, indixes, x, y):
+    zernike_polynomials = [
+           lambda x,y,r: 1,                                    # 0: piston
+           lambda x,y,r: 2.*x,                                 # 1: tilt
+           lambda x,y,r: 2.*y,                                 # 2: tilt 
+           lambda x,y,r: 2.*tf.sqrt(6.)*x*y,                   # 3: astigmatism 
+           lambda x,y,r: tf.sqrt(3.)*(2.*tf.square(r)-1.),     # 4: defocus
+           lambda x,y,r: tf.sqrt(6.)*(x**2-y**2),              # 5: astigmatism 
+           lambda x,y,r: tf.sqrt(8.)*y*(3*x**2-y**2),          # 6: trefoil
+           lambda x,y,r: tf.sqrt(8.)*x*(3*r**2-2),             # 7: coma
+           lambda x,y,r: tf.sqrt(8.)*y*(3*r**2-2),             # 8: coma
+           lambda x,y,r: tf.sqrt(8.)*x*(3*x**2-y**2),]          # 9: trefoil
+    
+    
     r = tf.sqrt(tf.square(x) + tf.square(y))
-    Z1  =  Z[0]
-    #Z2  =  Z[1]  * 2.*x
-    #Z3  =  Z[2]  * 2.*y
-    #Z4  =  Z[1]  * tf.sqrt(3.)*(2.*tf.square(r)-1.)
-    Z5  =  Z[1]  * 2.*tf.sqrt(6.)*x*y
-    Z6  =  Z[2]  * tf.sqrt(6.)*(x**2-y**2)
-    #Z7  =  Z[4]  * tf.sqrt(8.)*y*(3*r**2-2)
-    #Z8  =  Z[5]  * tf.sqrt(8.)*x*(3*r**2-2)
-    #Z9  =  Z[6]  * tf.sqrt(8.)*y*(3*x**2-y**2)
-    #Z10 =  Z[7] * tf.sqrt(8.)*x*(x**2-3*y**2)
-    #Z11 =  Z[11] * __sqrt__(5)*(6*r**4-6*r**2+1)
-    #Z12 =  Z[12] * __sqrt__(10)*(x**2-y**2)*(4*r**2-3)
-    #Z13 =  Z[13] * 2*__sqrt__(10)*x*y*(4*r**2-3)
-    #Z14 =  Z[14] * __sqrt__(10)*(r**4-8*x**2*y**2)
-    #Z15 =  Z[15] * 4*__sqrt__(10)*x*y*(x**2-y**2)
-    #Z16 =  Z[16] * __sqrt__(12)*x*(10*r**4-12*r**2+3)
-    #Z17 =  Z[17] * __sqrt__(12)*y*(10*r**4-12*r**2+3)
-    #Z18 =  Z[18] * __sqrt__(12)*x*(x**2-3*y**2)*(5*r**2-4)
-    #Z19 =  Z[19] * __sqrt__(12)*y*(3*x**2-y**2)*(5*r**2-4)
-    #Z20 =  Z[20] * __sqrt__(12)*x*(16*x**4-20*x**2*r**2+5*r**4)
-    #Z21 =  Z[21] * __sqrt__(12)*y*(16*y**4-20*y**2*r**2+5*r**4)
-    #Z22 =  Z[22] * __sqrt__(7)*(20*r**6-30*r**4+12*r**2-1)
-    #Z23 =  Z[23] * 2*__sqrt__(14)*x*y*(15*r**4-20*r**2+6)
-    #Z24 =  Z[24] * __sqrt__(14)*(x**2-y**2)*(15*r**4-20*r**2+6)
-    #Z25 =  Z[25] * 4*__sqrt__(14)*x*y*(x**2-y**2)*(6*r**2-5)
-    #Z26 =  Z[26] * __sqrt__(14)*(8*x**4-8*x**2*r**2+r**4)*(6*r**2-5)
-    #Z27 =  Z[27] * __sqrt__(14)*x*y*(32*x**4-32*x**2*r**2+6*r**4)
-    #Z28 =  Z[28] * __sqrt__(14)*(32*x**6-48*x**4*r**2+18*x**2*r**4-r**6)
-    #Z29 =  Z[29] * 4*y*(35*r**6-60*r**4+30*r**2-4)
-    #Z30 =  Z[30] * 4*x*(35*r**6-60*r**4+30*r**2-4)
-    #Z31 =  Z[31] * 4*y*(3*x**2-y**2)*(21*r**4-30*r**2+10)
-    #Z32 =  Z[32] * 4*x*(x**2-3*y**2)*(21*r**4-30*r**2+10)
-    #Z33 =  Z[33] * 4*(7*r**2-6)*(4*x**2*y*(x**2-y**2)+y*(r**4-8*x**2*y**2))
-    #Z34 =  Z[34] * (4*(7*r**2-6)*(x*(r**4-8*x**2*y**2)-4*x*y**2*(x**2-y**2)))
-    #Z35 =  Z[35] * (8*x**2*y*(3*r**4-16*x**2*y**2)+4*y*(x**2-y**2)*(r**4-16*x**2*y**2))
-    #Z36 =  Z[36] * (4*x*(x**2-y**2)*(r**4-16*x**2*y**2)-8*x*y**2*(3*r**4-16*x**2*y**2))
-    #Z37 =  Z[37] * 3*(70*r**8-140*r**6+90*r**4-20*r**2+1)
-    #ZW = Z5+Z6  
-    ZW = Z1 + Z5 + Z6
-    #ZW =     Z1 + Z2 +  Z3+  Z4+  Z5+  Z6#+  #Z7+  Z8+  Z9+ Z10
-    #+ Z11+ Z12+ Z13+ Z14+ Z15+ Z16+ Z17+ Z18+ Z19+ \
-            #Z20+ Z21+ Z22+ Z23+ Z24+ Z25+ Z26+ Z27+ Z28+ Z29+ \
-            #Z30+ Z31+ Z32+ Z33+ Z34+ Z35+ Z36+ Z37
-    return ZW
+    
+    ZN = 0
+    for i in range(0, len(indixes)):
+        ZN = ZN + coefficients[i]*zernike_polynomials[indixes[i]](x,y,r)
+        
+    return ZN
+
+
