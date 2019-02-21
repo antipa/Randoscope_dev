@@ -271,6 +271,27 @@ def propTF(u1,L,lam,z):
     u2=np.fft.ifftshift(np.fft.ifft2(U2))
     return u2
 
+#have tf do everything for us
+def loss (model, inputs):
+    Rmat = model(inputs)
+    return tf.reduce_sum(tf.square(Rmat)), Rmat
+
+def loss_sum(model, inputs):
+    Rmat = model(inputs)
+    return tf.reduce_sum(Rmat), Rmat
+
+def loss_inf(model, inputs):
+    Rmat = model(inputs)
+    return tf.reduce_max(Rmat), Rmat
+
+def loss_mixed(model, inputs):
+    # max of off diags, sum of diags
+    Rmat = model(inputs)
+    diag_vec = Rmat[0:model.Nz]
+    off_diag = Rmat[model.Nz+1:-1]
+    return tf.reduce_sum(tf.abs(diag_vec)) + tf.reduce_max(off_diag), Rmat
+
+
 def remove_nan_gradients(grads):
    # Get rid of NaN gradients
    for g in range(0,len(grads)):
@@ -289,6 +310,66 @@ def project_to_aper_keras(model):
     model.xpos.assign(x_new)
     model.ypos.assign(y_new)
     
+    
+def find_best_initialization(model, num_trials = 2000, save_results =False):
+    loss_list = []
+    defocus_grid=  1./(np.linspace(1/model.zmin_virtual, 1./model.zmax_virtual, model.Nz * 1)) #mm or dioptres
+    init_loss,_ = loss(model, defocus_grid)
+    loss_list.append(init_loss.numpy())
+
+    x_best = tfe.Variable(tf.zeros(model.Nlenslets));    
+    y_best = tfe.Variable(tf.zeros(model.Nlenslets));       
+    r_best = tfe.Variable(tf.zeros(model.Nlenslets));
+    loss_best = loss_list[0]
+
+    x_worst = tfe.Variable(tf.zeros(model.Nlenslets));  
+    y_worst = tfe.Variable(tf.zeros(model.Nlenslets));       
+    r_worst = tfe.Variable(tf.zeros(model.Nlenslets));
+    loss_worst = loss_list[0]
+
+    for i in range(0,num_trials):
+        [xnew,ynew, rnew]=poissonsampling_circular(model)
+        tf.assign(model.xpos, xnew)
+        tf.assign(model.ypos, ynew)
+        tf.assign(model.rlist, rnew)
+
+        current_loss,_ = loss(model, defocus_grid)
+
+
+        if i%1 == 0:
+            print('iteration: ', i, ', min value: ', loss_best, ', max value: ', loss_worst , end="\r")
+        if current_loss < np.min(loss_list):
+            tf.assign(x_best, xnew)
+            tf.assign(y_best, ynew)
+            tf.assign(r_best, rnew)
+            loss_best = current_loss.numpy()
+
+        elif current_loss > np.max(loss_list):
+            tf.assign(x_worst, xnew)
+            tf.assign(y_worst, ynew)
+            tf.assign(r_worst, rnew)
+            loss_worst = current_loss.numpy()
+
+
+        loss_list.append(current_loss.numpy())
+    
+    
+    # Save 
+    dict_best = {'x_best' : x_best.numpy(),
+             'y_best': y_best.numpy(),
+             'r_best': r_best.numpy(),
+             'loss': loss_best}
+
+    dict_worst = {'x_worst' : x_worst.numpy(),
+             'y_worst': y_worst.numpy(),
+             'r_worst': r_worst.numpy(),
+              'loss': loss_worst}
+
+    if save_results == True:
+        scipy.io.savemat('/media/hongdata/Kristina/MiniscopeData/best_init.mat', dict_best)
+        scipy.io.savemat('/media/hongdata/Kristina/MiniscopeData/worst_init.mat', dict_worst)
+
+        
 def zernikecartesian(coefficient,x,y):
     """
     ------------------------------------------------
@@ -306,12 +387,12 @@ def zernikecartesian(coefficient,x,y):
     Z = coefficient
     #Z = [0]+coefficient
     r = tf.sqrt(tf.square(x) + tf.square(y))
-    #Z1  =  Z[0]
-   # Z2  =  Z[1]  * 2.*x
-   # Z3  =  Z[2]  * 2.*y
+    Z1  =  Z[0]
+    #Z2  =  Z[1]  * 2.*x
+    #Z3  =  Z[2]  * 2.*y
     #Z4  =  Z[1]  * tf.sqrt(3.)*(2.*tf.square(r)-1.)
-    Z5  =  Z[0]  * 2.*tf.sqrt(6.)*x*y
-    Z6  =  Z[1]  * tf.sqrt(6.)*(x**2-y**2)
+    Z5  =  Z[1]  * 2.*tf.sqrt(6.)*x*y
+    Z6  =  Z[2]  * tf.sqrt(6.)*(x**2-y**2)
     #Z7  =  Z[4]  * tf.sqrt(8.)*y*(3*r**2-2)
     #Z8  =  Z[5]  * tf.sqrt(8.)*x*(3*r**2-2)
     #Z9  =  Z[6]  * tf.sqrt(8.)*y*(3*x**2-y**2)
@@ -343,7 +424,8 @@ def zernikecartesian(coefficient,x,y):
     #Z35 =  Z[35] * (8*x**2*y*(3*r**4-16*x**2*y**2)+4*y*(x**2-y**2)*(r**4-16*x**2*y**2))
     #Z36 =  Z[36] * (4*x*(x**2-y**2)*(r**4-16*x**2*y**2)-8*x*y**2*(3*r**4-16*x**2*y**2))
     #Z37 =  Z[37] * 3*(70*r**8-140*r**6+90*r**4-20*r**2+1)
-    ZW = Z5+Z6  
+    #ZW = Z5+Z6  
+    ZW = Z1 + Z5 + Z6
     #ZW =     Z1 + Z2 +  Z3+  Z4+  Z5+  Z6#+  #Z7+  Z8+  Z9+ Z10
     #+ Z11+ Z12+ Z13+ Z14+ Z15+ Z16+ Z17+ Z18+ Z19+ \
             #Z20+ Z21+ Z22+ Z23+ Z24+ Z25+ Z26+ Z27+ Z28+ Z29+ \

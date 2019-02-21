@@ -11,10 +11,11 @@ class Model(tf.keras.Model):
     def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber=[]):   #'log_sum_exp'
         super(Model, self).__init__()
         target_option = 'airy'
-        self.samples = (512,512)  #Grid for PSF simulation
+        #self.samples = (512,512)  #Grid for PSF simulation
+        self.samples = (768,768)  #Grid for PSF simulation
         
         self.lam=510e-6
-        file=scipy.io.loadmat('/media/hongdata/Kristina/MinicopeData/GrinAberrations.mat')
+        file=scipy.io.loadmat('/media/hongdata/Kristina/MiniscopeData/GrinAberrations.mat')
         GrinAber=file['GrinAberrations']
         self.Grin=[]
         for i in range(len(GrinAber)):
@@ -53,7 +54,7 @@ class Model(tf.keras.Model):
         self.zsampling = zsampling
         self.grid_z_planes=20
         
-        self.numzern = 2
+        self.numzern = 3
         #self.defocus_grid=  1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.grid_z_planes)) #mm or dioptres
 
         #if self.zsampling is 'fixed':
@@ -62,8 +63,8 @@ class Model(tf.keras.Model):
         self.min_offset= 0#-10e-3
         self.max_offset= 50e-3
         #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float32)
-        self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
-        #self.lenslet_offset=tf.zeros(self.Nlenslets)
+        #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
+        self.lenslet_offset=tf.zeros(self.Nlenslets)
         #initializing the x and y positions
         [xpos,ypos, rlist]=poissonsampling_circular(self)
         
