@@ -187,14 +187,14 @@ for r = 1:niter
 end
 
 %% Try estimating bg using low rank business
-ymat = vec(Rweight(1)*yi_reg(:,:,good_ids(1)));
+ymat = vec(yi_reg(:,:,1));
 for m = 2:M
     ymat = cat(2,ymat,vec(yi_reg(:,:,m)));
     m
 end
 %%
 tic
-rnk = 12;    %Rank of bg
+rnk = 48;    %Rank of bg
 [u,s,v] = svds(ymat,rnk);
 
 
@@ -228,8 +228,8 @@ yq = -Ny/2+1:Ny/2;
 beta = zeros([size(Xq)*2,rnk]);
 for r = 1:rnk
     %beta(:,:,r) = interp2(si_mat(2,:)', si_mat(1,:)', alpha(:,r)',Xq, Yq);
-    interpolant_r = scatteredInterpolant(si_mat(2,:)', si_mat(1,:)', alpha(:,r),'natural','nearest');
-    beta(:,:,r) = rot90(padarray(interpolant_r(Xq,Yq),[Ny/2,Nx/2],'replicate'),2);
+    interpolant_r = scatteredInterpolant(-si_mat(2,:)', -si_mat(1,:)', alpha(:,r),'natural','nearest');
+    beta(:,:,r) = rot90(padarray(interpolant_r(Xq,Yq),[Ny/2,Nx/2],'replicate'),0);
 end
 
 
