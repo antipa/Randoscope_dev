@@ -1,4 +1,4 @@
-function [comps, weights,shifts] = Miniscope_svd_xy(stack,icenter,rnk,varargin)
+function [comps, weights,weights_interp,shifts] = Miniscope_svd_xy(stack,icenter,rnk,varargin)
 % [comps, weights,shifts] = Miniscope_svd_xy(stack,center_id,rnk)
 % Takes in a background subtracted stack. Stack does not need to be on a
 % grid and will be blindly registerd with cross correlation. Registration
@@ -9,7 +9,9 @@ function [comps, weights,shifts] = Miniscope_svd_xy(stack,icenter,rnk,varargin)
 % cropping is happening'). Default is 'circular'
 % Returns 3d arrays comps and weights. comps
 % contains the psf components, and weights contains the spatially-varying
-% weights, upsampled to the same grid size as the inpus stack. 
+% weights_iterp, upsampled to the same grid size as the inpus stack.
+% Returns weights, the SVD weighting for each measurement (not on a
+% grid--this is index-aligned with shifts)
 % Also returns cell array of shifts found in registration
 
 p = inputParser;
@@ -75,10 +77,10 @@ fprintf('svd took %.2f seconds \n',t_svd)
 comps = reshape(u,[Ny, Nx,rnk]);
 vt = v';
 
-alpha = zeros(M,rnk);
+weights = zeros(M,rnk);
 for m = 1:M
     for r = 1:rnk
-        alpha(m,r) = s(r,r)*vt(r,m);
+        weights(m,r) = s(r,r)*vt(r,m);
     end
 end
 si_mat = reshape(cell2mat(si)',[2,M]);
@@ -86,11 +88,11 @@ xq = -Nx/2+1:Nx/2;
 yq = -Ny/2+1:Ny/2;
 [Xq, Yq] = meshgrid(xq,yq);
 
-weights = zeros(Ny, Nx,rnk);
+weights_interp = zeros(Ny, Nx,rnk);
 fprintf('interpolating...\n')
 for r = 1:rnk
-    interpolant_r = scatteredInterpolant(si_mat(2,:)', si_mat(1,:)', alpha(:,r),'natural','nearest');
-    weights(:,:,r) = rot90(interpolant_r(Xq,Yq),2);
+    interpolant_r = scatteredInterpolant(si_mat(2,:)', si_mat(1,:)', weights(:,r),'natural','nearest');
+    weights_interp(:,:,r) = rot90(interpolant_r(Xq,Yq),2);
 end
 fprintf('done')
 
