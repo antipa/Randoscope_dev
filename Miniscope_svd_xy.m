@@ -1,4 +1,4 @@
-function [comps, weights,weights_interp,shifts,yi_reg_out] = Miniscope_svd_xy(stack,icenter,rnk,varargin)
+function [comps, weights_interp, weights,shifts,yi_reg_out] = Miniscope_svd_xy(stack,icenter,rnk,varargin)
 % [comps, weights,shifts] = Miniscope_svd_xy(stack,center_id,rnk)
 % Takes in a background subtracted stack. Stack does not need to be on a
 % grid and will be blindly registerd with cross correlation. Registration

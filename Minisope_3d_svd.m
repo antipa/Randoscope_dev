@@ -44,5 +44,5 @@ bgpath = [data_dir,'/shifted_psf_background.tif']
 bg = imresize(double(imread(bgpath)),1/ds,'box');
 %%
 timing_ = tic;
-[comps, weights,weights_interp,shifts,yi_reg_out] = Miniscope_svd_xy(ystack-bg,182,12);
+[comps, weights_interp,weights,shifts,yi_reg_out] = Miniscope_svd_xy(ystack-bg,182,12);
 toc(timing_)
