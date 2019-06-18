@@ -1,4 +1,4 @@
-function [comps, weights,weights_interp,shifts] = Miniscope_svd_xy(stack,icenter,rnk,varargin)
+function [comps, weights,weights_interp,shifts,yi_reg_out] = Miniscope_svd_xy(stack,icenter,rnk,varargin)
 % [comps, weights,shifts] = Miniscope_svd_xy(stack,center_id,rnk)
 % Takes in a background subtracted stack. Stack does not need to be on a
 % grid and will be blindly registerd with cross correlation. Registration
@@ -13,6 +13,8 @@ function [comps, weights,weights_interp,shifts] = Miniscope_svd_xy(stack,icenter
 % Returns weights, the SVD weighting for each measurement (not on a
 % grid--this is index-aligned with shifts)
 % Also returns cell array of shifts found in registration
+% Returns yi_reg_out, an 8-bit image of each psf after registration. This
+% is just for visual inspection!
 
 p = inputParser;
 addParameter(p,'boundary_condition','circular')
@@ -33,7 +35,7 @@ pc = Nx + 1; % Relative centers of all correlations
 
 
 yi_reg = 0*stack;   %Registered stack
-
+yi_reg_out = uint8(yi_reg);
 switch lower(params.boundary_condition)
     case('circular')
         pad = @(x)x;
@@ -52,13 +54,16 @@ for m = 1:M
 end
 si = cell(1,M);
 % Do fft registration
+fprintf('registering...\n')
 for m = 1:M
     
     [r,c] = ind2sub(2*[Ny, Nx],findpeak_id(fftcorr(remove_hot_pixels(stack(:,:,m),3,.0001),stack(:,:,icenter))));
     si{m} = [-(r-pr),-(c-pc)];
     yi_reg(:,:,m) = crop(Si(pad(stack(:,:,m)),si{m}));
+    yi_reg_out(:,:,m) = uint8(yi_reg(:,:,m)/max(max(yi_reg(:,:,m)))*255);
     
 end
+fprintf('done registering\n')
 
 fprintf('creating matrix\n')
 ymat = zeros(Ny*Nx,M);
@@ -66,7 +71,7 @@ for m = 1:M
     ymat(:,m) = vec(yi_reg(:,:,m));
     
 end
-fprintf('done')
+fprintf('done\n')
 
 fprintf('starting svd...\n')
 tic
