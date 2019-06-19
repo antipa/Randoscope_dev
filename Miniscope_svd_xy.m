@@ -54,10 +54,28 @@ for m = 1:M
 end
 si = cell(1,M);
 % Do fft registration
+fprintf('Removing background and hot pixels...\n')
+
+stack_dct = stack;
+
+for n = 1:size(stack_dct,3)
+    im = stack(:,:,n);
+    bg_dct = dct2(remove_hot_pixels(im,3,.0001));
+    bg_dct(1:20,1:20) = 0;
+
+    stack_dct(:,:,n) = idct2(reshape(bg_dct,size(im)));
+
+    
+end
+
+fprintf('done\n')
+
 fprintf('registering...\n')
+
 for m = 1:M
     
-    [r,c] = ind2sub(2*[Ny, Nx],findpeak_id(fftcorr(remove_hot_pixels(stack(:,:,m),3,.0001),stack(:,:,icenter))));
+    %[r,c] = ind2sub(2*[Ny, Nx],findpeak_id(fftcorr(remove_hot_pixels(stack(:,:,m),3,.0001),stack(:,:,icenter))));
+    [r,c] = ind2sub(2*[Ny, Nx],findpeak_id(fftcorr(stack_dct(:,:,m),stack_dct(:,:,icenter))));
     si{m} = [-(r-pr),-(c-pc)];
     yi_reg(:,:,m) = crop(Si(pad(stack(:,:,m)),si{m}));
     yi_reg_out(:,:,m) = uint8(yi_reg(:,:,m)/max(max(yi_reg(:,:,m)))*255);
