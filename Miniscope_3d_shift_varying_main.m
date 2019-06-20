@@ -1,9 +1,13 @@
 % Read in PSF
 % This is designed to work with measurements in a folder, then in a
 % parallel folder, save the recons (i.e. measurements../recons/)
-data_path = 'D:\Kyrollos\RandoscopeNanoscribe';   %<--folder where the measurements are
+data_path = 'D:\Kyrollos\RandoscopeNanoscribe\measurements';   %<--folder where the measurements are
 
-meas_name = 'nick_fan_better_light_388_2p4ms.tif';    %<--- name of measurement
+meas_name = 'res_target_1_MMStack_Pos0.ome.tif';    %<--- name of measurement
+bg_name = 'bck_res_target_1_MMStack_Pos0.ome.tif';
+
+meas_path = [data_path,'/',meas_name];
+bg_path = [data_path,'/',bg_name];
 
 psf_path = 'D:\Kyrollos\RandoscopeNanoscribe\RandoscopeNanoscribe\Miniscope3D\psf_svd_12comps_23z_240xy_20190619';
 comps_path = [psf_path,'/comps.mat'];
@@ -20,7 +24,7 @@ clear weights_in
 
 %%
 
-
+params.meas_depth = 41;    %If using 3D tiff, which slice was processed?
 params.ds_z = 1;   %Temporal downsampling. Use 1 or 2. ds_t = 2 will reduce time points by 2x
 params.meas_bias = 0;
 init_style = 'zeros';   %Use 'loaded' to load initialization, 'zeros' to start from scratch. Admm will run 2D deconv, then replicate result to all time points

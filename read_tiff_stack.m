@@ -5,21 +5,23 @@ function stack = read_tiff_stack(path,varargin)
 
 
 info = imfinfo(path);
-num_images = numel(info);
+num_images_in = numel(info);
 
 if nargin>1
     ds = varargin{1};
     if nargin > 2
         k_list = varargin{2};
     else
-        k_list = 1:num_images;
+        k_list = 1:num_images_in;
     end
 else
     ds = 1;
 end
-
-stack = zeros(info(1).Height/ds, info(1).Width/ds, num_images);
+num_planes = length(k_list);
+stack = zeros(info(1).Height/ds, info(1).Width/ds, num_planes);
+n = 0;
 for k = k_list
-    stack(:,:,k) = imresize(imread(path, k, 'Info', info),1/ds,'box');
+    n = n+1;
+    stack(:,:,n) = imresize(imread(path, k, 'Info', info),1/ds,'box');
     
 end
