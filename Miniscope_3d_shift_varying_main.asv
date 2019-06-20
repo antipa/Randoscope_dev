@@ -5,38 +5,28 @@ data_path = 'D:\Kyrollos\RandoscopeNanoscribe';   %<--folder where the measureme
 
 meas_name = 'nick_fan_better_light_388_2p4ms.tif';    %<--- name of measurement
 
-psf_path = 'D:\Kyrollos\RandoscopeNanoscribe\RandoscopeNanoscribe\Miniscope3D\psf_svd_12comps_23z_240xy_20190619';
+psf_path = 'D:\Kyrollos\RandoscopeNanoscribe\RandoscopeNanoscribe\Miniscope3D\psf_svd_12comps_23z_300xy_20190619';
 comps_path = [psf_path,'/comps.mat'];
 weights_path = [psf_path,'/weights.mat'];
 
 %%
-h_in = load(comps_path);
-h = h_in.comps_path;
-clear h_in
-
-weights_in = load(weights_path);
-weights = weights_in.stack_weights_interp;
-clear weights_in
-
-%%
 
 
-params.ds_z = 1;   %Temporal downsampling. Use 1 or 2. ds_t = 2 will reduce time points by 2x
-params.meas_bias = 0;
+
+params.ds_t = 2;   %Temporal downsampling. Use 1 or 2. ds_t = 2 will reduce time points by 2x
+params.meas_bias = 103;
 init_style = 'zeros';   %Use 'loaded' to load initialization, 'zeros' to start from scratch. Admm will run 2D deconv, then replicate result to all time points
-params.ds = 1;   %Lateral downsampling. Use 4 or 8. 
+params.ds = 4;   %Lateral downsampling. Use 4 or 8. 
+params.nlines = 11;
+params.colors = [1,2,3];
 useGpu = 1;
-params.psf_norm = 'none';   %Use max, slice, fro, or none
+psf = imresize(warp_im(double(imread(psf_path))- params.psf_bias,1.00001), 1/params.ds, 'box'); 
 
-switch lower(params.psf_norm)
-    case('max')
-        h = h/max(sum(sum(h)));
-    case('none')
-    case('fro')
-        h = h/norm(vec(h));
-end
-
-
+h = psf/max(sum(sum(psf)));
+%h = psf/max(norm(psf,'fro')
+% psf_r = psf(:,:,1);
+% psf_g = psf(:,:,2);
+% psf_b = psf(:,:,3);
 
 
 % Read in data
