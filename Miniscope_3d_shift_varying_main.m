@@ -33,8 +33,8 @@ params.psf_norm = 'fro';   %Use max, slice, fro, or none
 
 
 
-h = h_in.stack_comps(:,:,params.z_range,1:params.rank);
-weights = weights_in.stack_weights_interp(:,:,params.z_range,1:params.rank);
+h = squeeze(h_in.stack_comps(:,:,params.z_range,1:params.rank));
+weights = squeeze(weights_in.stack_weights_interp(:,:,params.z_range,1:params.rank));
 
 
 switch lower(params.psf_norm)
@@ -63,7 +63,12 @@ b = data_in/max(data_in(:));
 
 %Nx = size(h,2);
 %Ny = size(h,1);
-[Ny, Nx, Nz, Nr] = size(h);
+if numel(size(h)) == 3
+    [Ny, Nx, Nr] = size(h);
+    Nz = 1;
+else
+    [Ny, Nx, Nz, Nr] = size(h);
+end
 
 %define crop and pad operators to handle 2D fft convolution
 pad2d = @(x)padarray(x,[size(h,1)/2,size(h,2)/2],0,'both');
