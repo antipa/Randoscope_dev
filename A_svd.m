@@ -6,3 +6,5 @@ for r = 1:size(H,3)
 end
 y = crop(ifft2(Y));
 
+%y = real(crop(ifft2(sum(fft2(weights.*x).*H,3))));
+

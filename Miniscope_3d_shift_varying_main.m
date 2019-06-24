@@ -25,7 +25,7 @@ init_style = 'zeros';   %Use 'loaded' to load initialization, 'zeros' to start f
 params.ds = 4;  % Global downsampling ratio (i.e.final image-to-sensor ratio)
 params.ds_psf = 1;   %PSf downsample ratio (how much to further downsample -- if preprocessing included downsampling, use 1) 
 params.ds_meas = 4;   % How much to further downsample measurement?
-params.z_range = 2:23;
+params.z_range = 2:23;  %Range of z slices to be solved for. If this is a scalar, 2D
 params.rank = 12;
 useGpu = 1;
 params.psf_norm = 'fro';   %Use max, slice, fro, or none
@@ -131,10 +131,14 @@ if useGpu
     weights = gpuArray(weights);
 end
 
+if Nz > 1
+    A = @(x)A_svd_3d(x, weights,H);
 
-A = @(x)A_svd_3d(x, weights,H);
-
-Aadj = @(y)A_adj_svd_3d(y, weights, Hconj);
+    Aadj = @(y)A_adj_svd_3d(y, weights, Hconj);
+elseif Nz == 1
+    A = @(x)A_svd(H, weights, x, nocrop);
+    Aadj = @(y)A_adj_svd(Hconj,weights,y,nocrop);
+end
 
 if useGpu
     grad_handle = @(x)linear_gradient_b(x, A, Aadj, gpuArray(single(b)));

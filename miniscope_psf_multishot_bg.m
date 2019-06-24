@@ -19,7 +19,7 @@ ystack = double(read_tiff_stack(xystackpath,ds/2));
 %bg = read_im_stack('/Users/nick.antipa/Documents/Diffusers/Miniscope/RandoscopeNanoscribe/Shift_Varying/bg',ds);
 %bgpath = '/Users/nick.antipa/Documents/Diffusers/Miniscope/RandoscopeNanoscribe/Shift_variance_june2019/bg_shiftedpsf_4_8um_bettertilt_1-1.tif';
 bgpath = [data_dir,'/shifted_psf_background.tif']
-bg = imresize(double(imread(bgpath)),1/ds,'box');
+bg = 1.003*imresize(double(imread(bgpath)),1/ds,'box');
 %good_ids = [54:61,73:81,91:100,111:118];
 %good_ids = [1:6,8:39]
 %good_ids = 1:size(ystack,3);
@@ -194,7 +194,7 @@ for m = 2:M
 end
 %%
 tic
-rnk = 48;    %Rank of bg
+rnk = 12;    %Rank of bg
 [u,s,v] = svds(ymat,rnk);
 
 
@@ -252,7 +252,9 @@ imd = imresize(imd/max(imd(:)),2/ds,'box');
 
 beta_crop = crop2d(beta);
 A = @(x)A_svd(H, beta_crop, x, nocrop);
+%A = @(x)A_svd_3d(x,beta_crop,H);
 A_adj = @(x)A_adj_svd(H_conj, beta_crop, x, nopad);
+%A_adj = @(x)A_adj_svd_3d(x,beta_crop,H_conj);
 
 GradErrHandle = @(x) linear_gradient(x,A,A_adj,imd);
 
