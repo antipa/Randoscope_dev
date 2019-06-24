@@ -154,7 +154,12 @@ pars.z_tv_weight = 3;    %z weighting in anisotropic TV
 tau2 = .1;
 TVnorm3d = @(x)sum(sum(sum(abs(x))));
 %prox_handle = @(x)deal(1/3*(x.*(x>=0) + soft(x, tau2) + tv3dApproxHaar(x, tau1)), TVnorm3d(x));
-prox_handle = @(x)deal(1/2*(max(x,0) + tv3d_iso_Haar(x, tau1, pars.z_tv_weight)), tau1*TVnorm3d(x));
+if Nz>1
+    prox_handle = @(x)deal(1/2*(max(x,0) + tv3d_iso_Haar(x, tau1, pars.z_tv_weight)), tau1*TVnorm3d(x));
+elseif Nz == 1
+    prox_handle = @(x)deal(.5*tv2d_aniso_haar(x,tau1*options.stepsize) + ...
+        .5*max(x,0), tau1*options.stepsize*TVnorm(x));
+end
 TVpars.epsilon = 1e-7;
 TVpars.MAXITER = 100;
 TVpars.alpha = .3;

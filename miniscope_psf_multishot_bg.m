@@ -282,7 +282,7 @@ nopad = @(x)x;
 
 tau = 3e-2;
 %prox_handle = @(x)deal(max(x,0), 0*tau*sum(abs(vec(x))));
-prox_handle = @(x)deal(.5*tv2dApproxHaar(x,tau*options.stepsize) + ...
+prox_handle = @(x)deal(.5*tv2d_aniso_haar(x,tau*options.stepsize) + ...
         .5*max(x,0), tau*options.stepsize*TVnorm(x));
     
 
