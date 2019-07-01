@@ -18,14 +18,14 @@ weights_in = load(weights_path);
 
 %%
 
-params.meas_depth = 31;    %If using 3D tiff, which slice was processed?
+params.meas_depth = 41;    %If using 3D tiff, which slice was processed?
 params.ds_z = 1;   %z downsampling ratio
 params.meas_bias = 0;
 init_style = 'zeros';   %Use 'loaded' to load initialization, 'zeros' to start from scratch. Admm will run 2D deconv, then replicate result to all time points
 params.ds = 4;  % Global downsampling ratio (i.e.final image-to-sensor ratio)
 params.ds_psf = 1;   %PSf downsample ratio (how much to further downsample -- if preprocessing included downsampling, use 1) 
 params.ds_meas = 4;   % How much to further downsample measurement?
-params.z_range = 2:23;  %Range of z slices to be solved for. If this is a scalar, 2D
+params.z_range = 10;  %Range of z slices to be solved for. If this is a scalar, 2D
 params.rank = 12;
 useGpu = 1;
 params.psf_norm = 'fro';   %Use max, slice, fro, or none
@@ -114,7 +114,11 @@ options.residTol = 5e-5;
 options.momentum = 'nesterov';
 options.disp_figs = 1;
 options.disp_fig_interval = 20;   %display image this often
-options.xsize = [Ny, Nx, Nz];
+if Nz == 1
+    options.xsize = [Ny, Nx];
+else
+    options.xsize=[Ny, Nx, Nz];
+end
 options.print_interval = 5;
 
 
