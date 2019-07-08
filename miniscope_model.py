@@ -8,20 +8,24 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber=[], zernikes = []):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = []):   #'log_sum_exp'
         super(Model, self).__init__()
         target_option = 'airy'
         #self.samples = (512,512)  #Grid for PSF simulation
         self.samples = (768,768)  #Grid for PSF simulation
         
         self.lam=510e-6
-        file=scipy.io.loadmat('/media/hongdata/Kristina/MiniscopeData/GrinAberrations.mat')
-        GrinAber=file['GrinAberrations']
-        self.Grin=[]
-        for i in range(len(GrinAber)):
-            Grinpad=pad_frac_tf(GrinAber[i,:,:]*self.lam, padfrac=0.5)
-            Grinresize=cv2.resize(Grinpad.numpy(),(self.samples[1],self.samples[1]))
-            self.Grin.append(Grinresize)
+        if GrinAber:
+            #'/media/hongdata/Kristina/MiniscopeData/GrinAberrations.mat'
+            # 'GrinAberrations'
+            file=scipy.io.loadmat(GrinAber)
+            GrinAber=file[GrinDictName]
+            self.Grin=[]
+            for i in range(len(GrinAber)):
+                Grinpad=pad_frac_tf(GrinAber[i,:,:]*self.lam, padfrac=0.5)
+                Grinresize=cv2.resize(Grinpad.numpy(),(self.samples[1],self.samples[1]))
+                self.Grin.append(Grinresize)
+                
         # min and max lenslet focal lengths in mm
         self.fmin = 6.15
         self.fmax = 25.

@@ -1,3 +1,4 @@
+import numpy as np
 def make_lenslet_surface(Xlist, Ylist, Rlist, xrng, yrng, samples,aperR):
     # Takes in Xlist, Ylist and Rlist: floating point center and radius values for each lenslet
     # xrng and yrng: x and y range (tuple) over which to define grid
@@ -45,3 +46,17 @@ def prop_field(Ui, z, lam, Fx, Fy):
     uf = fft.fftshift(fft.ifft2(fft.ifftshift(Up)))
     return uf
     
+def project_to_aperture(x_list, y_list, aperR, mode='snap'):
+    
+    lr = np.sqrt(x_list**2+y_list**2)
+    lout = lr<aperR
+    if mode is 'delete':
+        x_out = x_list[lout]
+        y_out = y_list[lout]
+    elif mode is 'snap':
+        ya = np.arctan2(y_list, x_list)
+        lr = np.minimum(lr, aperR)
+        y_out = lr * np.sin(ya)
+        x_out = lr * np.cos(ya)
+        
+    return x_out, y_out

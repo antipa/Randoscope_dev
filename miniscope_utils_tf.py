@@ -1,6 +1,9 @@
 import numpy as np
+import scipy as sc
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
+from bridson import poisson_disc_samples
+import miniscope_utils as ms_utils
 def make_lenslet_surface(Xlist, Ylist, Rlist, xrng, yrng, samples,aperR,r_lenslet):
     # Takes in Xlist, Ylist and Rlist: floating point center and radius values for each lenslet
     # xrng and yrng: x and y range (tuple) over which to define grid
@@ -369,8 +372,8 @@ def find_best_initialization(model, num_trials = 2000, save_results =False):
               'loss': loss_worst}
 
     if save_results == True:
-        scipy.io.savemat('/media/hongdata/Kristina/MiniscopeData/best_init.mat', dict_best)
-        scipy.io.savemat('/media/hongdata/Kristina/MiniscopeData/worst_init.mat', dict_worst)
+        sc.io.savemat('/media/hongdata/Kristina/MiniscopeData/best_init.mat', dict_best)
+        sc.io.savemat('/media/hongdata/Kristina/MiniscopeData/worst_init.mat', dict_worst)
 
        
     
@@ -395,5 +398,17 @@ def zernike_evaluate(coefficients, indixes, x, y):
         ZN = ZN + coefficients[i]*zernike_polynomials[indixes[i]](x,y,r)
         
     return ZN
+
+
+def bridson_poisson_N(r1 = .15, r2=.075,CA=.9, W=1.8,H=1.8,Nlenslets=1e9):
+    p = np.array(poisson_disc_samples(width=W,height=H,r=r1))
+    p_circ_x,p_circ_y = ms_utils.project_to_aperture(p[:,0]-W/2,p[:,1]-H/2,CA-r2,mode='delete')
+
+    if Nlenslets < len(p_circ_x):
+        inds = np.random.choice(len(p_circ_x), Nlenslets,replace=False)
+    else:
+        inds = range(len(p_circ_x))
+
+    return p_circ_x[inds], p_circ_y[inds]
 
 
