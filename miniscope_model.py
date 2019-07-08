@@ -8,7 +8,8 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = []):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2):   #'log_sum_exp'
+        # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
         target_option = 'airy'
         #self.samples = (512,512)  #Grid for PSF simulation
@@ -31,11 +32,11 @@ class Model(tf.keras.Model):
         self.fmax = 25.
         self.ior = 1.515
         self.lam=510e-6
-        
+        self.psf_norm = psf_norm
         # Min and max lenslet radii
         self.Rmin = self.fmin*(self.ior-1.)
         self.Rmax = self.fmax*(self.ior-1.)
-
+        self.psf_scale = tf.constant(psf_scale);
         # Convert to curvatures
         self.cmin = 1/self.Rmax
         self.cmax = 1/self.Rmin
@@ -130,7 +131,7 @@ class Model(tf.keras.Model):
         
         # Set regularization. Problem will be treated as l1 of spectral error at each depth + tau * l_inf(cross_corr)
         self.cross_corr_norm = cross_corr_norm
-        self.logsumexp_param = tf.constant(1e-3, tf.float32)   #lower is better l-infinity approximation, higher is worse but smoother
+        self.logsumexp_param = tf.constant(logsumparam, tf.float32)   #lower is better l-infinity approximation, higher is worse but smoother
         self.tau = tf.constant(30,tf.float32)    #Extra weight for cross correlation terms
         
         
@@ -179,7 +180,7 @@ class Model(tf.keras.Model):
         zstack = self.gen_psf_stack(T, aper, 0, defocus_list)
         
         psf_spect = self.gen_stack_spectrum(zstack)
-
+        #Fcorr_2dlist = self.gen_cross_spectra(psf_spect)
         normsize=tf.to_float(tf.shape(psf_spect)[0]*tf.shape(psf_spect)[1])
         
         Rmat_tf_diag = []
@@ -191,6 +192,7 @@ class Model(tf.keras.Model):
         for z1 in range(self.Nz):
             for z2 in range(z1, self.Nz):
                 Fcorr = tf.conj(psf_spect[z1])*psf_spect[z2]
+                #Fcorr = Fcorr_2dlist[z1][z2]
                 if z1 == z2:
                     # Difference between autocorrelation and target bandwidth
                     if self.ignore_dc:  
@@ -207,7 +209,7 @@ class Model(tf.keras.Model):
                     elif self.cross_corr_norm is 'log_sum_exp':   
                         # Implementation of eq. 7 from http://users.cecs.anu.edu.au/~yuchao/files/SmoothApproximationforL-infinityNorm.pdf
                         ccorr = tf.abs(tf.ifft2d(Fcorr))
-                        Rmat_tf_off_diag.append(self.tau * self.logsumexp_param * tf.reduce_logsumexp(tf.square(ccorr)/self.logsumexp_param) )
+                        Rmat_tf_off_diag.append(self.tau * self.logsumexp_param * tf.reduce_logsumexp((ccorr)/self.logsumexp_param) )
                         
                     elif self.cross_corr_norm is 'inf':
                         Rmat_tf_off_diag.append( self.tau * tf.reduce_max(tf.abs(tf.ifft2d(Fcorr))))
@@ -219,10 +221,19 @@ class Model(tf.keras.Model):
             
         return Rmat_tf #note this returns int data type!! vector not matrix. This is also my loss!
     
+    def gen_correlation_2d(self,psf_spect):
+        Fcorr=[[] for n in range(tf.shape(psf_spect)[0])]
+        for z1 in range(tf.shape(psf_spect)[0]):
+            [Fcorr[z1].append([]) for n in range(z1)]
+            for z2 in range(z1,tf.shape(psf_spect)[0]):
+                Fcorr[z1].append(tf_fftshift(tf.ifft2d(tf.conj(psf_spect[z1])*psf_spect[z2])))
+
+        return Fcorr
+    
     def gen_correlation_stack(self,psf_spect):
         Fcorr=[]
-        for z1 in range(self.Nz):
-            for z2 in range(self.Nz):
+        for z1 in range(tf.shape(psf_spect)[0]):
+            for z2 in range(z1,tf.shape(psf_spect)[0]):
                 Fcorr.append(tf_fftshift(tf.ifft2d(tf.conj(psf_spect[z1])*psf_spect[z2])))
 
         return Fcorr
@@ -240,7 +251,7 @@ class Model(tf.keras.Model):
         for z in range(0, len(zplanes)):
             
            # zstack.append(gen_psf_ag_tf(T,self,zplanes[z],'angle',0., prop_pad,Grin=self.Grin[z]))
-            zstack.append(gen_psf_ag_tf(T,self,zplanes[z],'angle',0., prop_pad,Grin=0))
+            zstack.append(gen_psf_ag_tf(T,self,zplanes[z],'angle',0., prop_pad,Grin=0,normalize=self.psf_norm))
 
         return zstack
     
@@ -249,14 +260,14 @@ class Model(tf.keras.Model):
         psf_pad=[]
 #         Rmat = np.zeros((self.Nz,self.Nz))
 
-        for z1 in range(self.Nz):
+        for z1 in range(tf.shape(zstack)[0]):
             psf_pad.append(pad_frac_tf(zstack[z1],self.corr_pad_frac)) #how much to pad? 
 
         psf_spect=[]
         
         #Getting spectrum
 
-        for z1 in range(self.Nz):
+        for z1 in range(tf.shape(zstack)[0]):
             psf_spect.append(tf.fft2d(tf.complex(tf_fftshift(psf_pad[z1]),tf.constant(0.,dtype = tf.float32))))
 
         return psf_spect

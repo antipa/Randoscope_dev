@@ -199,7 +199,7 @@ def propagate_field_freq_tf(model,U,padfrac=0):
         Up = crop2d(Up, shape_orig)
     return Up
 
-def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0):  #check negatives in exponents
+def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0,normalize='l1'):  #check negatives in exponents
     # Inputs:
     # surface: single surface thickness function, units: mm
     # ior : index of refraction of bulk material
@@ -213,6 +213,7 @@ def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0):  
     # xg and yg are the spatial grid (pixel spacing in mm)
     # Fx : frequency grid in 1/mm
     # Fy : same as Fx  
+    # normalize = 'l2','l1','max'
 
     if obj_def is 'angle':
         ramp_coeff_x = -tf.tan(model.field_list[0]*np.pi/180.)
@@ -233,7 +234,12 @@ def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0):  
     amp = tf.to_float(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA)
     U_prop = propagate_field_freq_tf(model, tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp), prop_pad)    
     psf = tf.square(tf.abs(U_prop))
-    return(psf/tf.sqrt(tf.reduce_sum(tf.square(psf)))) #DO WE NEED TO DO THIS????
+    if normalize == 'l2':
+        return(psf/tf.sqrt(tf.reduce_sum(tf.square(psf)))) #DO WE NEED TO DO THIS????
+    elif normalize == 'l1':
+        return(psf/tf.reduce_sum(psf))*model.psf_scale
+    elif normalize == 'max':
+        return(psf/tf.reduce_max(tf.abs(psf)))
     
 
 
