@@ -8,10 +8,13 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_measurements/test_psf.mat"):   #'log_sum_exp'
         # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
         target_option = 'airy'
+        self.loss_type = "psf_error"   #matrix_coherence: use cross corelations to design PSF
+                                              #psf_error: fit to measured PSF
+        psf_file = "../psf_meas/zstack_sim_test.mat"
         #self.samples = (512,512)  #Grid for PSF simulation
         self.samples = (768,768)  #Grid for PSF simulation
         
@@ -129,6 +132,13 @@ class Model(tf.keras.Model):
         elif target_option=='gaussian':
             self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.airy_aprox_pad), 0.)))
         
+        if self.loss_type is "psf_error":
+            psf_in = psf_in = sc.io.loadmat(psf_file)
+            Nz_in = np.shape(psf_in['zstack'])[0]
+            assert(Nz_in == self.Nz,'Measured PSF has different number of zplanes than model')
+            self.target_psf = [tf.constant(psf_in['zstack'][n]) for n in range(np.shape(psf_in['zstack'])[0])]
+
+        
         # Set regularization. Problem will be treated as l1 of spectral error at each depth + tau * l_inf(cross_corr)
         self.cross_corr_norm = cross_corr_norm
         self.logsumexp_param = tf.constant(logsumparam, tf.float32)   #lower is better l-infinity approximation, higher is worse but smoother
@@ -136,7 +146,10 @@ class Model(tf.keras.Model):
         
         
         self.ignore_dc = True   #Ignore DC in autocorrelations when computing frequency domain loss
-        dc_mask = np.ones_like(self.target_F.numpy())  #Mask for DC. Set to zero anywhere we want to ignore loss computation of power spectrum
+        
+                                         
+        #Mask for DC. Set to zero anywhere we want to ignore loss computation of power spectrum
+        dc_mask = np.ones_like(self.target_F.numpy())  
         dc_mask[:3,:3] = 0
         dc_mask[-2:,:1] = 0
         dc_mask[:1,-2:] = 0
@@ -179,46 +192,51 @@ class Model(tf.keras.Model):
         # Get psf stack
         zstack = self.gen_psf_stack(T, aper, 0, defocus_list)
         
-        psf_spect = self.gen_stack_spectrum(zstack)
-        #Fcorr_2dlist = self.gen_cross_spectra(psf_spect)
-        normsize=tf.to_float(tf.shape(psf_spect)[0]*tf.shape(psf_spect)[1])
         
+        #Fcorr_2dlist = self.gen_cross_spectra(psf_spect)
+       
         Rmat_tf_diag = []
         Rmat_tf_off_diag = []
         #calculating Xcorr
         
         
         # This now computes diagonals and off-diagonals separately then concatenates them. this makes is easier to "find" the diagonals/off diagonals for separate treatment  later.
-        for z1 in range(self.Nz):
-            for z2 in range(z1, self.Nz):
-                Fcorr = tf.conj(psf_spect[z1])*psf_spect[z2]
-                #Fcorr = Fcorr_2dlist[z1][z2]
-                if z1 == z2:
-                    # Difference between autocorrelation and target bandwidth
-                    if self.ignore_dc:  
-                        # Remove DC (assume no fftshift!)
+        if self.loss_type is "matrix_coherence":
+            psf_spect = self.gen_stack_spectrum(zstack)
+            normsize=tf.to_float(tf.shape(psf_spect)[0]*tf.shape(psf_spect)[1])
+        
+            for z1 in range(self.Nz):
+                for z2 in range(z1, self.Nz):
+                    Fcorr = tf.conj(psf_spect[z1])*psf_spect[z2]
+                    #Fcorr = Fcorr_2dlist[z1][z2]
+                    if z1 == z2:
+                        # Difference between autocorrelation and target bandwidth
+                        if self.ignore_dc:  
+                            # Remove DC (assume no fftshift!)
 
-                        Rmat_tf_diag.append(tf.reduce_sum(self.dc_mask * (tf.square((tf.abs(Fcorr) - self.target_F)/normsize))))
+                            Rmat_tf_diag.append(tf.reduce_sum(self.dc_mask * (tf.square((tf.abs(Fcorr) - self.target_F)/normsize))))
+                        else:
+                            Rmat_tf_diag.append(tf.reduce_sum(tf.square((tf.abs(Fcorr) - self.target_F)/normsize)))
+
                     else:
-                        Rmat_tf_diag.append(tf.reduce_sum(tf.square((tf.abs(Fcorr) - self.target_F)/normsize)))
-                    
-                else:
-                    # Target is zero for cross correlation
-                    if self.cross_corr_norm is 'l2':
-                        Rmat_tf_off_diag.append( self.tau * tf.reduce_sum(tf.square(tf.abs(Fcorr)/normsize)))  #changed to one norm
-                    elif self.cross_corr_norm is 'log_sum_exp':   
-                        # Implementation of eq. 7 from http://users.cecs.anu.edu.au/~yuchao/files/SmoothApproximationforL-infinityNorm.pdf
-                        ccorr = tf.abs(tf.ifft2d(Fcorr))
-                        Rmat_tf_off_diag.append(self.tau * self.logsumexp_param * tf.reduce_logsumexp((ccorr)/self.logsumexp_param) )
-                        
-                    elif self.cross_corr_norm is 'inf':
-                        Rmat_tf_off_diag.append( self.tau * tf.reduce_max(tf.abs(tf.ifft2d(Fcorr))))
-        Rmat_tf = tf.concat([Rmat_tf_diag, Rmat_tf_off_diag],0)
-                        
-                        
+                        # Target is zero for cross correlation
+                        if self.cross_corr_norm is 'l2':
+                            Rmat_tf_off_diag.append( self.tau * tf.reduce_sum(tf.square(tf.abs(Fcorr)/normsize)))  #changed to one norm
+                        elif self.cross_corr_norm is 'log_sum_exp':   
+                            # Implementation of eq. 7 from http://users.cecs.anu.edu.au/~yuchao/files/SmoothApproximationforL-infinityNorm.pdf
+                            ccorr = tf.abs(tf.ifft2d(Fcorr))
+                            Rmat_tf_off_diag.append(self.tau * self.logsumexp_param * tf.reduce_logsumexp((ccorr)/self.logsumexp_param) )
 
-        #Rmat=tf.reshape(Rmat_tf,(self.Nz,self.Nz))
+                        elif self.cross_corr_norm is 'inf':
+                            Rmat_tf_off_diag.append( self.tau * tf.reduce_max(tf.abs(tf.ifft2d(Fcorr))))
             
+        
+        elif self.loss_type is "psf_error":
+            # List of l2 loss (squared) for each z plane
+            Rmat_tf_diag = [0.5*tf.norm(zstack[n] - self.target_psf[n])**2 for n in range(self.Nz)]
+                
+
+        Rmat_tf = tf.concat([Rmat_tf_diag, Rmat_tf_off_diag],0)  
         return Rmat_tf #note this returns int data type!! vector not matrix. This is also my loss!
     
     def gen_correlation_2d(self,psf_spect):
