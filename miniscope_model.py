@@ -8,15 +8,16 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_measurements/test_psf.mat"):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_measurements/test_psf.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson'):   #'log_sum_exp'
         # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
         target_option = 'airy'
-        self.loss_type = "psf_error"   #matrix_coherence: use cross corelations to design PSF
+        self.lenslet_spacing = lenslet_spacing
+        self.loss_type = loss_type   #matrix_coherence: use cross corelations to design PSF
                                               #psf_error: fit to measured PSF
         psf_file = "../psf_meas/zstack_sim_test.mat"
         #self.samples = (512,512)  #Grid for PSF simulation
-        self.samples = (768,768)  #Grid for PSF simulation
+        self.samples = (1024,1024)  #Grid for PSF simulation
         
         self.lam=510e-6
         if GrinAber:
@@ -46,7 +47,7 @@ class Model(tf.keras.Model):
         self.xgrng = np.array((-1.8, 1.8)).astype('float32')    #Range, in mm, of grid of the whole plane (not just grin)
         self.ygrng = np.array((-1.8, 1.8)).astype('float32')
 
-        self.t = 10.    #Distance to sensor from mask in mm
+        self.t = 8.74    #Distance to sensor from mask in mm
 
         #Compute depth range of virtual image that mask sees (this is assuming an objective is doing some magnification)
 
@@ -57,10 +58,11 @@ class Model(tf.keras.Model):
             
         #Getting number of lenslets and z planes needed as well as defocus list
         self.ps = (self.xgrng[1] - self.xgrng[0])/self.samples[0]
-        self.Nlenslets=np.int(np.floor((self.CA**2)/(self.mean_lenslet_CA**2)))
-        self.Nz = 20
+        #self.Nlenslets=np.int(np.floor((self.CA**2)/(self.mean_lenslet_CA**2)))
+        self.Nlenslets = 37
+        self.Nz = 10
         self.zsampling = zsampling
-        self.grid_z_planes=20
+        self.grid_z_planes=10
         
 
         #self.defocus_grid=  1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.grid_z_planes)) #mm or dioptres
@@ -74,7 +76,15 @@ class Model(tf.keras.Model):
         #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
         self.lenslet_offset=tf.zeros(self.Nlenslets)
         #initializing the x and y positions
-        [xpos,ypos, rlist]=poissonsampling_circular(self)
+        #[xpos,ypos, rlist]=poissonsampling_circular(self)
+        if self.lenslet_spacing is 'poisson':
+            [xpos, ypos] = bridson_poisson_N(r1 = self.mean_lenslet_CA, 
+                                         r2=.075,CA=self.CA,H=2*self.CA,W=2*self.CA,Nlenslets=self.Nlenslets)
+        elif self.lenslet_spacing is 'uniform':
+            [xpos, ypos] = bridson_poisson_N(r1 = .05, 
+                                         r2=.075,CA=self.CA,H=2*self.CA,W=2*self.CA,Nlenslets=self.Nlenslets)
+            
+        rlist=np.random.permutation(1/(np.linspace(1/self.Rmax, 1/self.Rmin, self.Nlenslets)))
         
         self.min_r= self.Rmin
         self.max_r= self.Rmax
@@ -86,8 +96,12 @@ class Model(tf.keras.Model):
         #parameters for making the lenslet surface
         self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=tf.float32)
         self.xg=tf.constant(np.linspace(self.xgrng[0], self.xgrng[1], self.samples[1]),dtype=tf.float32)
+        
+        #Pixel size:
         self.px=tf.constant(self.xg[1] - self.xg[0],tf.float32)
         self.py=tf.constant(self.yg[1] - self.yg[0],tf.float32)
+        
+        # Setup grids
         self.xgm, self.ygm = tf.meshgrid(self.xg,self.yg)
 
         
@@ -96,14 +110,19 @@ class Model(tf.keras.Model):
         self.ynorm =  self.ygm/np.max(self.ygm)
 
         #PSF generation parameters
-        self.lam=tf.constant(510.*10.**(-6.),dtype=tf.float32)
-        self.k = np.pi*2./self.lam
+        self.lam=tf.constant(510e-6,dtype=tf.float32)
+        self.k = tf.constant(np.pi*2./self.lam)
         
+        #Compute frequency grid
         fx = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[1]),dtype=tf.float32)
         fy = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[0]),dtype=tf.float32)
         self.Fx,self.Fy = tf.meshgrid(fx,fy)
+        
+        # Field point to consider during modeling
         self.field_list = tf.constant(np.array((0., 0.)).astype('float32'))
-        M=6
+        
+        
+        M=6   #Magnification
         self.corr_pad_frac = 0
         self.target_res = target_res*M# micron   
         #         sig = 2*self.target_res/(2.355) * 1e-3
@@ -161,7 +180,7 @@ class Model(tf.keras.Model):
         # Zernike 
         self.zernikes = zernikes
         self.numzern = len(zernikes)
-        
+
         if aberrations == True:
             zern_init = []
             for i in range(self.Nlenslets):
@@ -170,7 +189,7 @@ class Model(tf.keras.Model):
     
             self.zernlist = tf.Variable(zern_init, dtype='float32', name='zernlist')
         else:
-            self.zernlist = 0
+            self.zernlist = []
         
         
     def call(self, defocus_list):

@@ -113,10 +113,21 @@ def make_lenslet_tf_zern(model):
         T_orig = []
     
     for n in range(model.Nlenslets):
-        sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm- model.xpos[n]))- tf.square((model.ygm-model.ypos[n])))
-                                          )-tf.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
+        #sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm- model.xpos[n]))- tf.square((model.ygm-model.ypos[n])))
+                                          #)-tf.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
+            
+        sphere = tf.real(tf.sqrt(
+            tf.square(model.rlist[n])
+            - tf.square((model.xgm-model.xpos[n]))
+            - tf.square((model.ygm-model.ypos[n]))))
+
+
+        sag = tf.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
+
+        sph1 = model.lenslet_offset[n] + sphere - sag
         
-        if np.shape(model.zernlist) != ():  # Including Zernike aberrations 
+        
+        if tf.not_equal(tf.size(model.zernlist),0):  # Including Zernike aberrations 
             # change to normalize by CA
             #Z = zernikecartesian(model.zernlist[n],  model.xnorm - model.xpos[n]/np.max(model.xgm)  ,model.ynorm - model.ypos[n]/np.max(model.xgm))
             x_coord = model.xnorm - model.xpos[n]/np.max(model.xgm)
@@ -141,10 +152,17 @@ def make_lenslet_tf_zern(model):
 def make_lenslet_tf(model):
         T = tf.zeros([model.samples[0],model.samples[1]])
         for n in range(model.Nlenslets):
-            sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm-
-                                                                          model.xpos[n])) - tf.square((model.ygm-model.ypos[n]))))-tf.real(tf.sqrt(tf.square(model.rlist[n]
-                                                                          )-tf.square(model.mean_lenslet_CA)))
+            sphere = tf.real(tf.sqrt(
+                tf.square(model.rlist[n])
+                - tf.square((model.xgm-model.xpos[n]))
+                - tf.square((model.ygm-model.ypos[n]))))
+
+
+            sag = tf.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
+
+            sph1 = model.lenslet_offset[n] + sphere - sag
             T = tf.maximum(T,sph1)
+                
         aper = tf.sqrt(model.xgm**2+model.ygm**2) <= model.CA
         return T,aper
     
