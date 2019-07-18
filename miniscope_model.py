@@ -8,7 +8,7 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_measurements/test_psf.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson'):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_measurements/test_psf.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson', Nlenslets = 'auto'):   #'log_sum_exp'
         # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
         target_option = 'airy'
@@ -32,8 +32,8 @@ class Model(tf.keras.Model):
                 self.Grin.append(Grinresize)
                 
         # min and max lenslet focal lengths in mm
-        self.fmin = 6.15
-        self.fmax = 25.
+        self.fmin = 5.5
+        self.fmax = 29.
         self.ior = 1.515
         self.lam=510e-6
         self.psf_norm = psf_norm
@@ -58,8 +58,10 @@ class Model(tf.keras.Model):
             
         #Getting number of lenslets and z planes needed as well as defocus list
         self.ps = (self.xgrng[1] - self.xgrng[0])/self.samples[0]
-        #self.Nlenslets=np.int(np.floor((self.CA**2)/(self.mean_lenslet_CA**2)))
-        self.Nlenslets = 37
+        if Nlenslets is 'auto':
+            self.Nlenslets=np.int(np.floor((self.CA**2)/(self.mean_lenslet_CA**2)))
+        else:
+            self.Nlenslets = Nlenslets
         self.Nz = 10
         self.zsampling = zsampling
         self.grid_z_planes=10
