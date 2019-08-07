@@ -304,7 +304,7 @@ def propTF(u1,L,lam,z):
 #have tf do everything for us
 def loss (model, inputs):
     Rmat = model(inputs)
-    return tf.reduce_sum(tf.square(Rmat)), Rmat
+    return tf.reduce_sum(Rmat), Rmat
 
 def loss_sum(model, inputs):
     Rmat = model(inputs)

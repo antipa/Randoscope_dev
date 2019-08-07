@@ -8,17 +8,17 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_measurements/test_psf.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson', Nlenslets = 'auto'):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_meas/zstack_sim_test.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson', Nlenslets = 'auto'):   #'log_sum_exp'
         # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
         target_option = 'airy'
         self.lenslet_spacing = lenslet_spacing
         self.loss_type = loss_type   #matrix_coherence: use cross corelations to design PSF
                                               #psf_error: fit to measured PSF
-        psf_file = "../psf_meas/zstack_sim_test.mat"
+        #psf_file = "../psf_meas/zstack_sim_test.mat"
         #self.samples = (512,512)  #Grid for PSF simulation
-        self.samples = (1024,1024)  #Grid for PSF simulation
-        
+        self.samples = (972,1296)  #Grid for PSF simulation
+        #self.samples = (1024,1024)
         self.lam=510e-6
         if GrinAber:
             #'/media/hongdata/Kristina/MiniscopeData/GrinAberrations.mat'
@@ -44,10 +44,13 @@ class Model(tf.keras.Model):
         # Convert to curvatures
         self.cmin = 1/self.Rmax
         self.cmax = 1/self.Rmin
-        self.xgrng = np.array((-1.8, 1.8)).astype('float32')    #Range, in mm, of grid of the whole plane (not just grin)
-        self.ygrng = np.array((-1.8, 1.8)).astype('float32')
+        self.xgrng = np.array((-2.8512, 2.8512)).astype('float32')    #Range, in mm, of grid of the whole plane (not just grin)
+        self.ygrng = np.array((-2.1384,2.1384  )).astype('float32')
+        #self.xgrng = np.array((-1.8,1.8)).astype('float32')
+        #self.ygrng = np.array((-1.8,1.8)).astype('float32')
 
-        self.t = 8.74    #Distance to sensor from mask in mm
+        self.t = 8.74
+        # 8.74    #Distance to sensor from mask in mm
 
         #Compute depth range of virtual image that mask sees (this is assuming an objective is doing some magnification)
 
@@ -88,9 +91,10 @@ class Model(tf.keras.Model):
             
         rlist=np.random.permutation(1/(np.linspace(1/self.Rmax, 1/self.Rmin, self.Nlenslets)))
         
-        self.min_r= self.Rmin
+        self.min_r= 1
         self.max_r= self.Rmax
         self.rlist = tfe.Variable(rlist,name='rlist', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_r, self.max_r))
+        #self.rlist = tfe.Variable(rlist,name='rlist',dtype=tf.float32)
         #self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float32, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
         #self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float32, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
         self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float32)
@@ -157,7 +161,7 @@ class Model(tf.keras.Model):
             psf_in = psf_in = sc.io.loadmat(psf_file)
             Nz_in = np.shape(psf_in['zstack'])[0]
             assert(Nz_in == self.Nz,'Measured PSF has different number of zplanes than model')
-            self.target_psf = [tf.constant(psf_in['zstack'][n]) for n in range(np.shape(psf_in['zstack'])[0])]
+            self.target_psf = [tf.constant(psf_in['zstack'][n]*self.psf_scale,tf.float32) for n in range(np.shape(psf_in['zstack'])[0])]
 
         
         # Set regularization. Problem will be treated as l1 of spectral error at each depth + tau * l_inf(cross_corr)
@@ -254,8 +258,8 @@ class Model(tf.keras.Model):
         
         elif self.loss_type is "psf_error":
             # List of l2 loss (squared) for each z plane
-            Rmat_tf_diag = [0.5*tf.norm(zstack[n] - self.target_psf[n])**2 for n in range(self.Nz)]
-                
+            Rmat_tf_diag = [.5*tf.reduce_sum((zstack[n] - self.target_psf[n])**2) for n in range(self.Nz)]
+
 
         Rmat_tf = tf.concat([Rmat_tf_diag, Rmat_tf_off_diag],0)  
         return Rmat_tf #note this returns int data type!! vector not matrix. This is also my loss!
