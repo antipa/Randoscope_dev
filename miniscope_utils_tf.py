@@ -4,6 +4,11 @@ import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 from bridson import poisson_disc_samples
 import miniscope_utils as ms_utils
+
+
+
+
+
 def make_lenslet_surface(Xlist, Ylist, Rlist, xrng, yrng, samples,aperR,r_lenslet):
     # Takes in Xlist, Ylist and Rlist: floating point center and radius values for each lenslet
     # xrng and yrng: x and y range (tuple) over which to define grid
@@ -105,10 +110,10 @@ def poissonsampling_circular(model):
 
 
 def make_lenslet_tf_zern(model):
-    T = tf.zeros([model.samples[0],model.samples[1]])
+    T = tf.zeros([model.samples[0],model.samples[1]],tf.float64)
     
     if np.shape(model.zernlist) != (): 
-        T_orig = tf.zeros([model.samples[0],model.samples[1]])
+        T_orig = tf.zeros([model.samples[0],model.samples[1]],tf.float64)
     else:
         T_orig = []
     
@@ -249,8 +254,8 @@ def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0,nor
             U_in = tf_exp(1*-z_dis*model.k*tf.sqrt(1-tf.square((model.xgm-model.field_list[0])/z_dis) - tf.square((model.ygm-model.field_list[1])/z_dis)))
     
     U_out = U_in * tf_exp((model.k*(model.ior-1)*T + pupil_phase))
-    amp = tf.to_float(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA)
-    U_prop = propagate_field_freq_tf(model, tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp), prop_pad)    
+    amp = tf.cast(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA, tf.float64)
+    U_prop = propagate_field_freq_tf(model, tf.cast(tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp),tf.complex128), prop_pad)    
     psf = tf.square(tf.abs(U_prop))
     if normalize == 'l2':
         return(psf/tf.sqrt(tf.reduce_sum(tf.square(psf)))) #DO WE NEED TO DO THIS????
@@ -435,4 +440,11 @@ def bridson_poisson_N(r1 = .15, r2=.075,CA=.9, W=1.8,H=1.8,Nlenslets=1e9):
 
     return p_circ_x[inds], p_circ_y[inds]
 
+
+def tf_2d_conv(x,y,padstr):
+    # Inputs x and y tensors (2d)
+    x_tensor = tf.reshape(x,[1,tf.shape(x)[0], tf.shape(x)[1], 1])
+    
+    y_tensor = tf.reshape(y,[tf.shape(y)[0], tf.shape(y)[1],1, 1])
+    return tf.squeeze(tf.nn.convolution(x_tensor,y_tensor,padstr))
 
