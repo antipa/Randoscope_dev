@@ -170,6 +170,12 @@ def make_lenslet_tf(model):
                 
         aper = tf.sqrt(model.xgm**2+model.ygm**2) <= model.CA
         return T,aper
+
+def diff_tf(arr,ax):
+    ndims = arr.ndim
+    slicer_ = tuple(slice(0+int(n==ax),-1,1) for n in range(ndims))
+    slicer = tuple(slice(0,-1-int(n==ax),1) for n in range(ndims))
+    return(arr[slicer_] - arr[slicer])    
     
 def crop2d(x, crop_size):
     cstart = (np.array(x.shape) - crop_size)//2  #there is an NP here!
@@ -209,13 +215,14 @@ def propagate_field_freq_tf(model,U,padfrac=0):
     if padfrac != 0:
         shape_orig = np.shape(U)
         U = pad_frac_tf(U, padfrac)
-        Fx, Fy = tf.meshgrid(tf.lin_space(tf.reduce_min(model.Fx), tf.reduce_max(model.Fx), U.shape[0]), tf.lin_space(tf.reduce_min(model.Fy), tf.reduce_max(model.Fy), U.shape[1]))
+        Fx, Fy = tf.meshgrid(tf.lin_space(tf.reduce_min(model.Fx), tf.reduce_max(model.Fx), U.shape[1]), tf.lin_space(tf.reduce_min(model.Fy), tf.reduce_max(model.Fy), U.shape[0]))
         Fxn=Fx
         Fyn=Fy
     else:
         Fxn=model.Fx
         Fyn=model.Fy
     Uf = tf_fftshift(tf.fft2d(tf_fftshift(U)))
+
     Hf = tf_exp(2.*np.pi*model.t/model.lam * tf.sqrt(1-tf.square(model.lam*Fxn) - tf.square(model.lam*Fyn)))
     Up = tf_fftshift(tf.ifft2d(tf_fftshift(Uf*Hf)))
     if padfrac != 0:
@@ -255,6 +262,7 @@ def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0,nor
     
     U_out = U_in * tf_exp((model.k*(model.ior-1)*T + pupil_phase))
     amp = tf.cast(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA, tf.float64)
+
     U_prop = propagate_field_freq_tf(model, tf.cast(tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp),tf.complex128), prop_pad)    
     psf = tf.square(tf.abs(U_prop))
     if normalize == 'l2':
@@ -311,6 +319,10 @@ def loss (model, inputs):
     Rmat = model(inputs)
     return tf.reduce_sum(Rmat), Rmat
 
+def loss_extra(model, inputs):
+    Rmat, err_stack = model(inputs)
+    return tf.reduce_sum(Rmat), Rmat, err_stack
+
 def loss_sum(model, inputs):
     Rmat = model(inputs)
     return tf.reduce_sum(Rmat), Rmat
@@ -334,10 +346,12 @@ def remove_nan_gradients(grads):
            grads[g] = new_grad
    return grads
 
-def project_to_aper_keras(model):
+def project_to_aper_keras(model,CA = -1):
+    if CA == -1:
+        CA = model.CA
     lenslets_dist = tf.sqrt(tf.square(model.xpos) + tf.square(model.ypos))
    # print(lenslets_dist)
-    dist_new = tf.minimum(lenslets_dist, model.CA-model.mean_lenslet_CA-tf.sqrt(2*model.rlist*model.lenslet_offset-tf.square(model.lenslet_offset)))
+    dist_new = tf.minimum(lenslets_dist, CA)
     
     th = tf.atan2(model.ypos, model.xpos)
     x_new = dist_new * tf.cos(th)

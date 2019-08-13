@@ -17,9 +17,8 @@ class Model(tf.keras.Model):
                                        #psf_error: fit to measured PSF
         self.incoherent_source = incoherent_source   #If True, convolve PSF with source shape
         self.source_size = 4.8   #um, diameter
-        self.mag = 6.1/2   #System magnification
+        self.mag = 6.1   #System magnification
 
-        #psf_file = "../psf_meas/zstack_sim_test.mat"
         #self.samples = (512,512)  #Grid for PSF simulation
         self.samples = (972,1296)  #Grid for PSF simulation
         #self.samples = (1024,1024)
@@ -64,11 +63,11 @@ class Model(tf.keras.Model):
 
         self.zmin_virtual = 1./(1./self.t - 1./self.fmin)
         self.zmax_virtual = 1./(1./self.t - 1./self.fmax)
-        self.CA = .95e3; #semi clear aperature of GRIN
+        self.CA = .85e3; #semi clear aperature of GRIN
         self.mean_lenslet_CA = tf.constant(lenslet_CA,tf.float64) #average lenslest semi clear aperture in mm. 
             
         #Getting number of lenslets and z planes needed as well as defocus list
-        self.ps = (self.xgrng[1] - self.xgrng[0])/self.samples[0]
+        self.ps = (self.xgrng[1] - self.xgrng[0])/(self.samples[1] + 1)
         if Nlenslets is 'auto':
             self.Nlenslets=np.int(np.floor((self.CA**2)/(self.mean_lenslet_CA**2)))
         else:
@@ -99,14 +98,26 @@ class Model(tf.keras.Model):
             
         rlist=np.random.permutation(1/(np.linspace(1/self.Rmax, 1/self.Rmin, self.Nlenslets)))
         
-        self.min_r= 1
+        self.min_r= self.Rmin * 0.3
         self.max_r= self.Rmax
-        self.rlist = tfe.Variable(rlist,name='rlist', dtype = tf.float64,constraint=lambda t: tf.clip_by_value(t,self.min_r, self.max_r))
+        
+        
+        
+# Variables        
+        self.rlist = tfe.Variable(rlist,name='rlist', dtype = tf.float64,
+                                  constraint=lambda t: tf.clip_by_value(t,self.min_r, self.max_r))
+        
+        # Add variable for defocus as input to self.gen_psf_stack
+        
         #self.rlist = tfe.Variable(rlist,name='rlist',dtype=tf.float64)
         #self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float64, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
         #self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float64, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
         self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float64)
         self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float64)
+        
+        self.defocus_offset = tfe.Variable(tf.zeros(self.Nz,tf.float64), name='defocus_offset', dtype = tf.float64,
+                                          constraint = lambda t: tf.clip_by_value(t,-1./400000,1./400000))
+        
         #parameters for making the lenslet surface
         self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=tf.float64)
         self.xg=tf.constant(np.linspace(self.xgrng[0], self.xgrng[1], self.samples[1]),dtype=tf.float64)
@@ -140,18 +151,13 @@ class Model(tf.keras.Model):
         
         self.corr_pad_frac = 0
         self.target_res = target_res*M# micron   
-        #         sig = 2*self.target_res/(2.355) * 1e-3
-        #         real_target = tf.exp(-(tf.square(self.xgm) + tf.square(self.ygm))/(2*tf.square(sig)))
-        #         real_target = pad_frac_tf(real_target / tf.reduce_max(real_target), self.corr_pad_frac)
-        #         self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(real_target), 0.)))
 
         D=tf.constant(10.,tf.float64)   #1.22*self.lam/(tf.sin(2*tf.atan(self.target_res/(2*self.t))))  #0.514 for half_max, 1.22 for first zero. 
         x_airy=self.k*D*tf.sin(tf.atan(self.xgm/self.t))/2
         y_airy=self.k*D*tf.sin(tf.atan(self.ygm/self.t))/2
-        #Xa, Ya = tf.meshgrid(x_airy, y_airy)
+
         Ra = tf.sqrt(tf.square(x_airy) + tf.square(y_airy))
 
-        #         self.target_airy=((2*scsp.j1(x_airy)/x_airy)**2) *((2*scsp.j1(y_airy)/y_airy)**2)
         target_airy = (2*scsp.j1(Ra)/Ra)**2
         self.target_airy = target_airy/tf.sqrt(tf.reduce_sum(tf.square(target_airy)))
         self.target_airy_pad = pad_frac_tf(self.target_airy, self.corr_pad_frac)
@@ -162,7 +168,8 @@ class Model(tf.keras.Model):
         self.airy_aprox_pad = pad_frac_tf(self.airy_aprox_target / tf.reduce_max(self.airy_aprox_target), self.corr_pad_frac)
 
         if target_option=='airy':
-            self.target_F = tf.square(tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.target_airy_pad), tf.constant(0.,tf.float64)))))
+            self.target_F = tf.square(tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.target_airy_pad), 
+                                                                 tf.constant(0.,tf.float64)))))
         elif target_option=='gaussian':
             self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.airy_aprox_pad), tf.constant(0.,tf.float64))))
         
@@ -210,21 +217,14 @@ class Model(tf.keras.Model):
     def call(self, defocus_list):
 
         if np.size(defocus_list) == 1:
-            defocus_list = 1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)) #mm or dioptres
+            defocus_list = tf.constant(1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)),
+                                       tf.float64)#mm or dioptres
             
-            #if self.zsampling is "uniform_random":
-            #    self.defocus_list = 1/np.sort(np.random.uniform(low = 1/self.zmin_virtual, high = 1./self.zmax_virtual, size = (self.Nz,)))
-            #
-            #elif self.zsampling is "random_grid":
-            #    testint = random.sample(range(0,model.grid_z_planes), model.Nz)
-            #    self.defocus_list = self.defocus_grid[testint]
-        #else:
-        #    self.defocus_list = grid_opt
             
         T, aper,_ = make_lenslet_tf_zern(self) 
         #T,aper=make_lenslet_tf(self) #offset added
         # Get psf stack
-        zstack = self.gen_psf_stack(T, aper, 0, defocus_list)
+        zstack = self.gen_psf_stack(T, aper, 0.0, 1./(1./defocus_list + self.defocus_offset))
         
         
         ## Smooth with bead size
@@ -248,7 +248,8 @@ class Model(tf.keras.Model):
         #calculating Xcorr
         
         
-        # This now computes diagonals and off-diagonals separately then concatenates them. this makes is easier to "find" the diagonals/off diagonals for separate treatment  later.
+        # This now computes diagonals and off-diagonals separately then concatenates them. 
+        # this makes is easier to "find" the diagonals/off diagonals for separate treatment  later.
         if self.loss_type is "matrix_coherence":
             psf_spect = self.gen_stack_spectrum(zstack)
             normsize=tf.to_float(tf.shape(psf_spect)[0]*tf.shape(psf_spect)[1])
@@ -281,7 +282,14 @@ class Model(tf.keras.Model):
         
         elif self.loss_type is "psf_error":
             # List of l2 loss (squared) for each z plane
-            Rmat_tf_diag = [.5*tf.reduce_sum((zstack[n] - self.target_psf[n])**2) for n in range(self.Nz)]
+                       
+            zstack = [zstack[n]*tf.reduce_sum(self.target_psf[n] * zstack[n])/tf.reduce_sum(zstack[n]**2) 
+                      for n in range(self.Nz)]
+#             Rmat_tf_diag = [0.333*(tf.reduce_sum(tf.abs(diff_tf(zstack[n] - self.target_psf[n],0)))
+#                                              +tf.reduce_sum(tf.abs(diff_tf(zstack[n] - self.target_psf[n],1)))
+#                                              +tf.reduce_sum(tf.abs(zstack[n] - self.target_psf[n])))
+#                                                 for n in range(self.Nz)] 
+            Rmat_tf_diag = [tf.reduce_sum(tf.abs(zstack[n] - self.target_psf[n])) for n in range(self.Nz)] 
 
 
         Rmat_tf = tf.concat([Rmat_tf_diag, Rmat_tf_off_diag],0)  
@@ -308,13 +316,14 @@ class Model(tf.keras.Model):
         zstack = []
         
         if np.size(zplanes) == 1:
-            zplanes = 1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)) #mm or dioptres
+            zplanes = tf.constant(1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)),
+                                  tf.float64)#mm or dioptres
             
         #if np.size(zplanes_opt) == 0:
         #    zplanes = self.defocus_list
         #else:
         #    zplanes = zplanes_opt   
-        for z in range(0, len(zplanes)):
+        for z in range(0, tf.size(zplanes)):
             
            # zstack.append(gen_psf_ag_tf(T,self,zplanes[z],'angle',0., prop_pad,Grin=self.Grin[z]))
             zstack.append(gen_psf_ag_tf(T,self,zplanes[z],'angle',0., prop_pad,Grin=0,normalize=self.psf_norm))
