@@ -51,7 +51,7 @@ class Model(tf.keras.Model):
         self.cmax = 1/self.Rmin
         #self.xgrng = np.array((-2851.2, 2851.2)).astype('float32')    #Range, in mm, of grid of the whole plane (not just grin)
         #self.ygrng = np.array((-2138.4,2138.4)).astype('float32')
-        self.xgrng = np.array((-2851.2/2, 2851.2/2)).astype('float64')
+        self.xgrng = np.array((-2592*2.2/4, 2592*2.2/4)).astype('float64')
         self.ygrng = np.array((-2138.4/2,2138.4/2)).astype('float64')
         #self.xgrng = np.array((-1.8,1.8)).astype('float32')
         #self.ygrng = np.array((-1.8,1.8)).astype('float32')
@@ -67,7 +67,7 @@ class Model(tf.keras.Model):
         self.mean_lenslet_CA = tf.constant(lenslet_CA,tf.float64) #average lenslest semi clear aperture in mm. 
             
         #Getting number of lenslets and z planes needed as well as defocus list
-        self.ps = (self.xgrng[1] - self.xgrng[0])/(self.samples[1] + 1)
+        self.ps = (self.xgrng[1] - self.xgrng[0])/(self.samples[1])
         if Nlenslets is 'auto':
             self.Nlenslets=np.int(np.floor((self.CA**2)/(self.mean_lenslet_CA**2)))
         else:
