@@ -110,12 +110,12 @@ def poissonsampling_circular(model):
 
 
 def make_lenslet_tf_zern(model):
-    T = tf.zeros([model.samples[0],model.samples[1]],tf.float64)
+    T = tf.zeros([model.samples[0],model.samples[1]],model.precision_tf)
     
-    if np.shape(model.zern_coefficients) != (): 
-        T_orig = tf.zeros([model.samples[0],model.samples[1]],tf.float64)
-    else:
-        T_orig = []
+#     if np.shape(model.zern_coefficients) != (): 
+#         T_orig = tf.zeros([model.samples[0],model.samples[1]],tf.float64)
+#     else:
+#         T_orig = []
     
     for n in range(model.Nlenslets):
         #sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm- model.xpos[n]))- tf.square((model.ygm-model.ypos[n])))
@@ -133,28 +133,21 @@ def make_lenslet_tf_zern(model):
         
         
         if tf.not_equal(tf.size(model.zernikes),0):  # Including Zernike aberrations 
-            # change to normalize by CA
-            #Z = zernikecartesian(model.zern_coefficients[n],  model.xnorm - model.xpos[n]/np.max(model.xgm)  ,model.ynorm - model.ypos[n]/np.max(model.xgm))
-            #x_coord = model.xnorm - model.xpos[n]/np.max(model.xgm)
-            #y_coord = model.ynorm - model.ypos[n]/np.max(model.xgm)
+
             x_coord = (model.xgm-model.xpos[n])/model.cart_norm
             y_coord = (model.ygm-model.ypos[n])/model.cart_norm
             
+            # This returns zernikes where r<=1, and 0 outside
             Z =  zernike_evaluate(model.zern_coefficients[n], model.zernikes, x_coord, y_coord)
             
-            #r = 1. # Not sure about this
-            #Z[(model.xnorm  - model.xpos[n]/np.max(model.xgm) )**2+(model.ynorm - model.ypos[n]/np.max(model.xgm))**2>r**2]=0 # Crop to be a circle
-            sph2 = sph1 + Z
-            
-            
-            T_orig = tf.maximum(T_orig,sph1)
-            T = tf.maximum(T,sph2)
-        else:
-            T = tf.maximum(T,sph1)
+
+            sph1 += Z
+
+        T = tf.maximum(T,sph1)
             
         
     aper = tf.sqrt(model.xgm**2+model.ygm**2) <= model.CA
-    return T, aper, T_orig
+    return T, aper
 
 
 def zernike_evaluate(coefficients, indices, x, y):
@@ -177,9 +170,10 @@ def zernike_evaluate(coefficients, indices, x, y):
     
     
     r = tf.sqrt(tf.square(x) + tf.square(y))
-    mask = tf.cast(r<=1,tf.float64)
+    mask = tf.cast(r<=1,x.dtype)
     ZN = 0
     for i in range(len(indices)):
+        
         ZN = ZN + mask*coefficients[i]*zernike_polynomials[indices[i]](x,y,r)
         
     return ZN
@@ -292,9 +286,13 @@ def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0,nor
             U_in = tf_exp(1*-z_dis*model.k*tf.sqrt(1-tf.square((model.xgm-model.field_list[0])/z_dis) - tf.square((model.ygm-model.field_list[1])/z_dis)))
     
     U_out = U_in * tf_exp((model.k*(model.ior-1)*T + pupil_phase))
-    amp = tf.cast(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA, tf.float64)
-
-    U_prop = propagate_field_freq_tf(model, tf.cast(tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp),tf.complex128), prop_pad)    
+    amp = tf.cast(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA, model.precision_tf)
+    if model.precision_tf is tf.float64:
+        cplx_dtype = tf.complex128
+    elif model.precision_tf is tf.float32:
+        cplx_dtype = tf.complex64
+        
+    U_prop = propagate_field_freq_tf(model, tf.cast(tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp),cplx_dtype), prop_pad)    
     psf = tf.square(tf.abs(U_prop))
     if normalize == 'l2':
         return(psf/tf.sqrt(tf.reduce_sum(tf.square(psf)))) #DO WE NEED TO DO THIS????

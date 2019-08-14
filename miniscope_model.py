@@ -8,9 +8,10 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_meas/zstack_sim_test.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson', Nlenslets = 'auto',incoherent_source = False):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_meas/zstack_sim_test.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson', Nlenslets = 'auto',incoherent_source = False,precision_tf=tf.float32):   #'log_sum_exp'
         # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
+        self.precision_tf = precision_tf
         target_option = 'airy'
         self.lenslet_spacing = lenslet_spacing
         self.loss_type = loss_type   #matrix_coherence: use cross corelations to design PSF
@@ -23,7 +24,7 @@ class Model(tf.keras.Model):
         self.samples = (972,1296)  #Grid for PSF simulation
         #self.samples = (1024,1024)
         lam = 510e-3
-        self.lam=tf.constant(lam,dtype=tf.float64)
+        self.lam=tf.constant(lam,dtype=self.precision_tf)
         
         if GrinAber:
             #'/media/hongdata/Kristina/MiniscopeData/GrinAberrations.mat'
@@ -45,14 +46,14 @@ class Model(tf.keras.Model):
         # Min and max lenslet radii
         self.Rmin = self.fmin*(self.ior-1.)
         self.Rmax = self.fmax*(self.ior-1.)
-        self.psf_scale = tf.constant(psf_scale,tf.float64);
+        self.psf_scale = tf.constant(psf_scale,self.precision_tf);
         # Convert to curvatures
         self.cmin = 1/self.Rmax
         self.cmax = 1/self.Rmin
         #self.xgrng = np.array((-2851.2, 2851.2)).astype('float32')    #Range, in mm, of grid of the whole plane (not just grin)
         #self.ygrng = np.array((-2138.4,2138.4)).astype('float32')
-        self.xgrng = np.array((-2592*2.2/4, 2592*2.2/4)).astype('float64')
-        self.ygrng = np.array((-2138.4/2,2138.4/2)).astype('float64')
+        self.xgrng = np.array((-2592*2.2/4, 2592*2.2/4))
+        self.ygrng = np.array((-2138.4/2,2138.4/2))
         #self.xgrng = np.array((-1.8,1.8)).astype('float32')
         #self.ygrng = np.array((-1.8,1.8)).astype('float32')
 
@@ -60,11 +61,11 @@ class Model(tf.keras.Model):
         # 8.74    #Distance to sensor from mask in mm
 
         #Compute depth range of virtual image that mask sees (this is assuming an objective is doing some magnification)
-
+        
         self.zmin_virtual = 1./(1./self.t - 1./self.fmin)
         self.zmax_virtual = 1./(1./self.t - 1./self.fmax)
         self.CA = .85e3; #semi clear aperature of GRIN
-        self.mean_lenslet_CA = tf.constant(lenslet_CA,tf.float64) #average lenslest semi clear aperture in mm. 
+        self.mean_lenslet_CA = tf.constant(lenslet_CA,self.precision_tf) #average lenslest semi clear aperture in mm. 
             
         #Getting number of lenslets and z planes needed as well as defocus list
         self.ps = (self.xgrng[1] - self.xgrng[0])/(self.samples[1])
@@ -84,8 +85,8 @@ class Model(tf.keras.Model):
             
         self.min_offset= 0#-10e-3
         self.max_offset= 50
-        #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float64)
-        #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float64,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
+        #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = self.precision_tf)
+        #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = self.precision_tf,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
         
         #initializing the x and y positions
         #[xpos,ypos, rlist]=poissonsampling_circular(self)
@@ -104,28 +105,28 @@ class Model(tf.keras.Model):
         
         
 # Variables        
-        self.rlist = tfe.Variable(rlist,name='rlist', dtype = tf.float64,
+        self.rlist = tfe.Variable(rlist,name='rlist', dtype = self.precision_tf,
                                   constraint=lambda t: tf.clip_by_value(t,self.min_r, self.max_r))
         
         # Add variable for defocus as input to self.gen_psf_stack
         
-        #self.rlist = tfe.Variable(rlist,name='rlist',dtype=tf.float64)
-        #self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float64, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
-        #self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float64, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
-        self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float64)
-        self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float64)
+        #self.rlist = tfe.Variable(rlist,name='rlist',dtype=self.precision_tf)
+        #self.xpos = tfe.Variable(xpos, name='xpos', dtype = self.precision_tf, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
+        #self.ypos = tfe.Variable(ypos, name='ypos', dtype = self.precision_tf, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
+        self.xpos = tfe.Variable(xpos, name='xpos', dtype = self.precision_tf)
+        self.ypos = tfe.Variable(ypos, name='ypos', dtype = self.precision_tf)
         
-        self.defocus_offset = tfe.Variable(tf.zeros(self.Nz,tf.float64), name='defocus_offset', dtype = tf.float64,
+        self.defocus_offset = tfe.Variable(tf.zeros(self.Nz,self.precision_tf), name='defocus_offset', dtype = self.precision_tf,
                                           constraint = lambda t: tf.clip_by_value(t,-1./100000,1./100000))
-        self.lenslet_offset=tf.Variable(tf.zeros(self.Nlenslets,tf.float64),name='lenslet_offset',dtype=tf.float64,
+        self.lenslet_offset=tf.Variable(tf.zeros(self.Nlenslets,self.precision_tf),name='lenslet_offset',dtype=self.precision_tf,
                                         constraint=lambda t: tf.clip_by_value(t,-4,5))
         #parameters for making the lenslet surface
-        self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=tf.float64)
-        self.xg=tf.constant(np.linspace(self.xgrng[0], self.xgrng[1], self.samples[1]),dtype=tf.float64)
+        self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=self.precision_tf)
+        self.xg=tf.constant(np.linspace(self.xgrng[0], self.xgrng[1], self.samples[1]),dtype=self.precision_tf)
         
         #Pixel size:
-        self.px=tf.constant(self.xg[1] - self.xg[0],tf.float64)
-        self.py=tf.constant(self.yg[1] - self.yg[0],tf.float64)
+        self.px=tf.constant(self.xg[1] - self.xg[0],self.precision_tf)
+        self.py=tf.constant(self.yg[1] - self.yg[0],self.precision_tf)
         
         # Setup grids
         self.xgm, self.ygm = tf.meshgrid(self.xg,self.yg)
@@ -138,19 +139,19 @@ class Model(tf.keras.Model):
         #Normalization constant for computing zernikes. i.e. x coordinate fed into zernike computation will be 
         # (self.xgm - self.xpos[n])/self.cart_norm for lenslet n. 
         
-        self.cart_norm = self.mean_lenslet_CA/2   #Aim for having rho=1 at edge of each lenslet. This won't be exact!
+        self.cart_norm = self.mean_lenslet_CA   #Aim for having rho=1 at edge of each lenslet. This won't be exact!
 
         #PSF generation parameters
         
         self.k = tf.constant(np.pi*2./self.lam)
         
         #Compute frequency grid
-        fx = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[1]),dtype=tf.float64)
-        fy = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[0]),dtype=tf.float64)
+        fx = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[1]),dtype=self.precision_tf)
+        fy = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[0]),dtype=self.precision_tf)
         self.Fx,self.Fy = tf.meshgrid(fx,fy)
         
         # Field point to consider during modeling
-        self.field_list = tf.constant(np.array((0., 0.)).astype('float64'))
+        self.field_list = tf.constant(np.array((0., 0.)),self.precision_tf)
         
         
         M=6.   #Magnification
@@ -158,7 +159,7 @@ class Model(tf.keras.Model):
         self.corr_pad_frac = 0
         self.target_res = target_res*M# micron   
 
-        D=tf.constant(10.,tf.float64)   #1.22*self.lam/(tf.sin(2*tf.atan(self.target_res/(2*self.t))))  #0.514 for half_max, 1.22 for first zero. 
+        D=tf.constant(10.,self.precision_tf)   #1.22*self.lam/(tf.sin(2*tf.atan(self.target_res/(2*self.t))))  #0.514 for half_max, 1.22 for first zero. 
         x_airy=self.k*D*tf.sin(tf.atan(self.xgm/self.t))/2
         y_airy=self.k*D*tf.sin(tf.atan(self.ygm/self.t))/2
 
@@ -175,21 +176,21 @@ class Model(tf.keras.Model):
 
         if target_option=='airy':
             self.target_F = tf.square(tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.target_airy_pad), 
-                                                                 tf.constant(0.,tf.float64)))))
+                                                                 tf.constant(0.,self.precision_tf)))))
         elif target_option=='gaussian':
-            self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.airy_aprox_pad), tf.constant(0.,tf.float64))))
+            self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.airy_aprox_pad), tf.constant(0.,self.precision_tf))))
         
         if self.loss_type is "psf_error":
             psf_in = psf_in = sc.io.loadmat(psf_file)
             Nz_in = np.shape(psf_in['zstack'])[0]
             assert(Nz_in == self.Nz,'Measured PSF has different number of zplanes than model')
-            self.target_psf = [tf.constant(psf_in['zstack'][n].astype(np.float64)*self.psf_scale,tf.float64) for n in range(np.shape(psf_in['zstack'])[0])]
+            self.target_psf = [tf.constant(psf_in['zstack'][n]*self.psf_scale,self.precision_tf) for n in range(np.shape(psf_in['zstack'])[0])]
 
         
         # Set regularization. Problem will be treated as l1 of spectral error at each depth + tau * l_inf(cross_corr)
         self.cross_corr_norm = cross_corr_norm
-        self.logsumexp_param = tf.constant(logsumparam, tf.float64)   #lower is better l-infinity approximation, higher is worse but smoother
-        self.tau = tf.constant(30,tf.float64)    #Extra weight for cross correlation terms
+        self.logsumexp_param = tf.constant(logsumparam, self.precision_tf)   #lower is better l-infinity approximation, higher is worse but smoother
+        self.tau = tf.constant(30,self.precision_tf)    #Extra weight for cross correlation terms
         
         
         self.ignore_dc = True   #Ignore DC in autocorrelations when computing frequency domain loss
@@ -202,7 +203,7 @@ class Model(tf.keras.Model):
         dc_mask[:1,-2:] = 0
         dc_mask[-2:,-2:]= 0
         dc_mask = dc_mask * self.target_F.numpy()>(.001*np.max(self.target_F.numpy()))
-        self.dc_mask = tf.constant(dc_mask,tf.float64)
+        self.dc_mask = tf.constant(dc_mask,self.precision_tf)
         
         # Use Zernike aberrations with random initialization 
         # Zernike 
@@ -210,24 +211,27 @@ class Model(tf.keras.Model):
         self.numzern = len(zernikes)
 
         if aberrations == True:
-            zern_init = []
-            for i in range(self.Nlenslets):
-                aberrations = np.zeros(self.numzern)
-                zern_init.append(aberrations)
+            zern_init = np.zeros((self.Nlenslets,self.numzern))
+#             for i in range(self.Nlenslets):
+#                 aberrations = np.zeros(self.numzern)
+#                 zern_init.append(aberrations)
     
-            self.zern_coefficients = tf.Variable(zern_init, dtype='float64', name='zern_coefficients')
+            self.zern_coefficients = tf.Variable(zern_init, 
+                                                 dtype=self.precision_tf, 
+                                                 name='zern_coefficients',constraint=lambda t: tf.clip_by_value(t,-1, 1))
         else:
             self.zern_coefficients = []
+            
         
         
     def call(self, defocus_list):
 
         if np.size(defocus_list) == 1:
             defocus_list = tf.constant(1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)),
-                                       tf.float64)#mm or dioptres
+                                       self.precision_tf)#mm or dioptres
             
             
-        T, aper,_ = make_lenslet_tf_zern(self) 
+        T, aper= make_lenslet_tf_zern(self) 
         #T,aper=make_lenslet_tf(self) #offset added
         # Get psf stack
         zstack = self.gen_psf_stack(T, aper, 0.0, 1./(1./defocus_list + self.defocus_offset))
@@ -237,12 +241,13 @@ class Model(tf.keras.Model):
         if self.incoherent_source is True:
             
             source_size_sensor = np.ceil(self.source_size*self.mag/self.px)
+            
             xkern = np.r_[-np.floor(source_size_sensor/2):np.ceil(source_size_sensor/2)]
             Xkern, Ykern = np.meshgrid(xkern,xkern)
             Rkern = np.sqrt(Xkern**2 + Ykern**2)
-            kern_numpy = (Rkern<=(source_size_sensor/2)).astype(np.float64)
+            kern_numpy = (Rkern<=(source_size_sensor/2)).astype('float64')
             kern_numpy /= np.sum(kern_numpy)
-            self.source_kern = tf.constant(kern_numpy,tf.float64)
+            self.source_kern = tf.constant(kern_numpy,self.precision_tf)
             zstack = [tf_2d_conv(zstack[n], self.source_kern,'SAME') for n in range(self.Nz)]
         
         
@@ -323,7 +328,7 @@ class Model(tf.keras.Model):
         
         if np.size(zplanes) == 1:
             zplanes = tf.constant(1./(np.linspace(1/self.zmin_virtual, 1./self.zmax_virtual, self.Nz)),
-                                  tf.float64)#mm or dioptres
+                                  self.precision_tf)#mm or dioptres
             
         #if np.size(zplanes_opt) == 0:
         #    zplanes = self.defocus_list
@@ -349,6 +354,6 @@ class Model(tf.keras.Model):
         #Getting spectrum
 
         for z1 in range(tf.shape(zstack)[0]):
-            psf_spect.append(tf.fft2d(tf.complex(tf_fftshift(psf_pad[z1]),tf.constant(0.,dtype = tf.float64))))
+            psf_spect.append(tf.fft2d(tf.complex(tf_fftshift(psf_pad[z1]),tf.constant(0.,dtype = self.precision_tf))))
 
         return psf_spect
