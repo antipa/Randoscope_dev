@@ -86,7 +86,7 @@ class Model(tf.keras.Model):
         self.max_offset= 50
         #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float64)
         #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = tf.float64,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
-        self.lenslet_offset=tf.zeros(self.Nlenslets,tf.float64)
+        
         #initializing the x and y positions
         #[xpos,ypos, rlist]=poissonsampling_circular(self)
         if self.lenslet_spacing is 'poisson':
@@ -117,7 +117,8 @@ class Model(tf.keras.Model):
         
         self.defocus_offset = tfe.Variable(tf.zeros(self.Nz,tf.float64), name='defocus_offset', dtype = tf.float64,
                                           constraint = lambda t: tf.clip_by_value(t,-1./100000,1./100000))
-        
+        self.lenslet_offset=tf.Variable(tf.zeros(self.Nlenslets,tf.float64),name='lenslet_offset',dtype=tf.float64,
+                                        constraint=lambda t: tf.clip_by_value(t,-4,5))
         #parameters for making the lenslet surface
         self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=tf.float64)
         self.xg=tf.constant(np.linspace(self.xgrng[0], self.xgrng[1], self.samples[1]),dtype=tf.float64)
