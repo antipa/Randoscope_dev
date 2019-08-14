@@ -132,8 +132,13 @@ class Model(tf.keras.Model):
 
         
         # Normalized coordinates
-        self.xnorm =  self.xgm/np.max(self.xgm)
-        self.ynorm =  self.ygm/np.max(self.ygm)
+        #self.xnorm =  self.xgm/np.max(self.xgm)
+        #self.ynorm =  self.ygm/np.max(self.ygm)
+        
+        #Normalization constant for computing zernikes. i.e. x coordinate fed into zernike computation will be 
+        # (self.xgm - self.xpos[n])/self.cart_norm for lenslet n. 
+        
+        self.cart_norm = self.mean_lenslet_CA/2   #Aim for having rho=1 at edge of each lenslet. This won't be exact!
 
         #PSF generation parameters
         
@@ -210,9 +215,9 @@ class Model(tf.keras.Model):
                 aberrations = np.zeros(self.numzern)
                 zern_init.append(aberrations)
     
-            self.zernlist = tf.Variable(zern_init, dtype='float64', name='zernlist')
+            self.zern_coefficients = tf.Variable(zern_init, dtype='float64', name='zern_coefficients')
         else:
-            self.zernlist = []
+            self.zern_coefficients = []
         
         
     def call(self, defocus_list):

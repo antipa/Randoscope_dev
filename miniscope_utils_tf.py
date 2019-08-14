@@ -112,7 +112,7 @@ def poissonsampling_circular(model):
 def make_lenslet_tf_zern(model):
     T = tf.zeros([model.samples[0],model.samples[1]],tf.float64)
     
-    if np.shape(model.zernlist) != (): 
+    if np.shape(model.zern_coefficients) != (): 
         T_orig = tf.zeros([model.samples[0],model.samples[1]],tf.float64)
     else:
         T_orig = []
@@ -132,12 +132,15 @@ def make_lenslet_tf_zern(model):
         sph1 = model.lenslet_offset[n] + sphere - sag
         
         
-        if tf.not_equal(tf.size(model.zernlist),0):  # Including Zernike aberrations 
+        if tf.not_equal(tf.size(model.zernikes),0):  # Including Zernike aberrations 
             # change to normalize by CA
-            #Z = zernikecartesian(model.zernlist[n],  model.xnorm - model.xpos[n]/np.max(model.xgm)  ,model.ynorm - model.ypos[n]/np.max(model.xgm))
-            x_coord = model.xnorm - model.xpos[n]/np.max(model.xgm)
-            y_coord = model.ynorm - model.ypos[n]/np.max(model.xgm)
-            Z =  zernike_evaluate(model.zernlist[n], model.zernikes, x_coord, y_coord)
+            #Z = zernikecartesian(model.zern_coefficients[n],  model.xnorm - model.xpos[n]/np.max(model.xgm)  ,model.ynorm - model.ypos[n]/np.max(model.xgm))
+            #x_coord = model.xnorm - model.xpos[n]/np.max(model.xgm)
+            #y_coord = model.ynorm - model.ypos[n]/np.max(model.xgm)
+            x_coord = (model.xgm-model.xpos[n])/model.cart_norm
+            y_coord = (model.ygm-model.ypos[n])/model.cart_norm
+            
+            Z =  zernike_evaluate(model.zern_coefficients[n], model.zernikes, x_coord, y_coord)
             
             #r = 1. # Not sure about this
             #Z[(model.xnorm  - model.xpos[n]/np.max(model.xgm) )**2+(model.ynorm - model.ypos[n]/np.max(model.xgm))**2>r**2]=0 # Crop to be a circle
@@ -152,6 +155,34 @@ def make_lenslet_tf_zern(model):
         
     aper = tf.sqrt(model.xgm**2+model.ygm**2) <= model.CA
     return T, aper, T_orig
+
+
+def zernike_evaluate(coefficients, indices, x, y):
+    zernike_polynomials = [
+           lambda x,y,r: 1,                                    # 0: piston
+           lambda x,y,r: 2.*y,                                 # 1: tilt
+           lambda x,y,r: 2.*x,                                 # 2: tilt 
+           lambda x,y,r: 2.*np.sqrt(6.)*x*y,                   # 3: astigmatism 
+           lambda x,y,r: np.sqrt(3.)*(2.*tf.square(r)-1.),     # 4: defocus
+           lambda x,y,r: np.sqrt(6.)*(x**2-y**2),              # 5: astigmatism 
+           lambda x,y,r: np.sqrt(8.)*y*(3*x**2-y**2),          # 6: trefoil
+           lambda x,y,r: np.sqrt(8.)*y*(3*r**2-2),             # 7: coma
+           lambda x,y,r: np.sqrt(8.)*x*(3*r**2-2),             # 8: coma
+           lambda x,y,r: np.sqrt(8.)*x*(x**2-3*y**2),          # 9: trefoil
+           lambda x,y,r: np.sqrt(10.)*4*x*y*(x**2-y**2),        # 10: Oblique quad
+           lambda x,y,r: np.sqrt(10.)*2*x*y*(4*x**2 + 4*y**2 - 3), #11: O sec. astig
+           lambda x,y,r: np.sqrt(5.)*(6*r**4 - 6*r**2 + 1),     #12: spherical
+           lambda x,y,r: np.sqrt(10.)*(4*(x**4 - y**4) + 3*(y**2-x**2))] #13
+        
+    
+    
+    r = tf.sqrt(tf.square(x) + tf.square(y))
+    mask = tf.cast(r<=1,tf.float64)
+    ZN = 0
+    for i in range(len(indices)):
+        ZN = ZN + mask*coefficients[i]*zernike_polynomials[indices[i]](x,y,r)
+        
+    return ZN
 
 
 def make_lenslet_tf(model):
@@ -420,29 +451,7 @@ def find_best_initialization(model, num_trials = 2000, save_results =False):
 
        
     
-def zernike_evaluate(coefficients, indices, x, y):
-    zernike_polynomials = [
-           lambda x,y,r: 1,                                    # 0: piston
-           lambda x,y,r: 2.*x,                                 # 1: tilt
-           lambda x,y,r: 2.*y,                                 # 2: tilt 
-           lambda x,y,r: 2.*tf.sqrt(6.)*x*y,                   # 3: astigmatism 
-           lambda x,y,r: tf.sqrt(3.)*(2.*tf.square(r)-1.),     # 4: defocus
-           lambda x,y,r: tf.sqrt(6.)*(x**2-y**2),              # 5: astigmatism 
-           lambda x,y,r: tf.sqrt(8.)*y*(3*x**2-y**2),          # 6: trefoil
-           lambda x,y,r: tf.sqrt(8.)*x*(3*r**2-2),             # 7: coma
-           lambda x,y,r: tf.sqrt(8.)*y*(3*r**2-2),             # 8: coma
-           lambda x,y,r: tf.sqrt(8.)*x*(x**2-3*y**2),          # 9: trefoil
-           lambda x,y,r: tf.sqrt(10.)*4*x*y*(x**2-y**2)]        # 10: Oblique quad
-        
-    
-    
-    r = tf.sqrt(tf.square(x) + tf.square(y))
-    
-    ZN = 0
-    for i in indices:
-        ZN = ZN + coefficients[i]*zernike_polynomials[indices[i]](x,y,r)
-        
-    return ZN
+
 
 
 def bridson_poisson_N(r1 = .15, r2=.075,CA=.9, W=1.8,H=1.8,Nlenslets=1e9):
