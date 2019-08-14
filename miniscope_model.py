@@ -116,7 +116,7 @@ class Model(tf.keras.Model):
         self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float64)
         
         self.defocus_offset = tfe.Variable(tf.zeros(self.Nz,tf.float64), name='defocus_offset', dtype = tf.float64,
-                                          constraint = lambda t: tf.clip_by_value(t,-1./400000,1./400000))
+                                          constraint = lambda t: tf.clip_by_value(t,-1./100000,1./100000))
         
         #parameters for making the lenslet surface
         self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=tf.float64)
