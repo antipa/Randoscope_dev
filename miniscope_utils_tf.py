@@ -420,7 +420,7 @@ def find_best_initialization(model, num_trials = 2000, save_results =False):
 
        
     
-def zernike_evaluate(coefficients, indixes, x, y):
+def zernike_evaluate(coefficients, indices, x, y):
     zernike_polynomials = [
            lambda x,y,r: 1,                                    # 0: piston
            lambda x,y,r: 2.*x,                                 # 1: tilt
@@ -431,14 +431,16 @@ def zernike_evaluate(coefficients, indixes, x, y):
            lambda x,y,r: tf.sqrt(8.)*y*(3*x**2-y**2),          # 6: trefoil
            lambda x,y,r: tf.sqrt(8.)*x*(3*r**2-2),             # 7: coma
            lambda x,y,r: tf.sqrt(8.)*y*(3*r**2-2),             # 8: coma
-           lambda x,y,r: tf.sqrt(8.)*x*(3*x**2-y**2),]          # 9: trefoil
+           lambda x,y,r: tf.sqrt(8.)*x*(x**2-3*y**2),          # 9: trefoil
+           lambda x,y,r: tf.sqrt(10.)*4*x*y*(x**2-y**2)]        # 10: Oblique quad
+        
     
     
     r = tf.sqrt(tf.square(x) + tf.square(y))
     
     ZN = 0
-    for i in range(0, len(indixes)):
-        ZN = ZN + coefficients[i]*zernike_polynomials[indixes[i]](x,y,r)
+    for i in indices:
+        ZN = ZN + coefficients[i]*zernike_polynomials[indices[i]](x,y,r)
         
     return ZN
 
