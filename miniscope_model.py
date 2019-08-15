@@ -12,7 +12,7 @@ class Model(tf.keras.Model):
         # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
         self.precision_tf = precision_tf
-        target_option = 'airy'
+        target_option = 'none'
         self.lenslet_spacing = lenslet_spacing
         self.loss_type = loss_type   #matrix_coherence: use cross corelations to design PSF
                                        #psf_error: fit to measured PSF
@@ -159,26 +159,28 @@ class Model(tf.keras.Model):
         self.corr_pad_frac = 0
         self.target_res = target_res*M# micron   
 
-        D=tf.constant(10.,self.precision_tf)   #1.22*self.lam/(tf.sin(2*tf.atan(self.target_res/(2*self.t))))  #0.514 for half_max, 1.22 for first zero. 
-        x_airy=self.k*D*tf.sin(tf.atan(self.xgm/self.t))/2
-        y_airy=self.k*D*tf.sin(tf.atan(self.ygm/self.t))/2
+        #D=tf.constant(10.,self.precision_tf)   #1.22*self.lam/(tf.sin(2*tf.atan(self.target_res/(2*self.t))))  #0.514 for half_max, 1.22 for first zero. 
+        #x_airy=self.k*D*tf.sin(tf.atan(self.xgm/self.t))/2
+        #y_airy=self.k*D*tf.sin(tf.atan(self.ygm/self.t))/2
 
-        Ra = tf.sqrt(tf.square(x_airy) + tf.square(y_airy))
+        #Ra = tf.sqrt(tf.square(x_airy) + tf.square(y_airy))
 
-        target_airy = (2*scsp.j1(Ra)/Ra)**2
-        self.target_airy = target_airy/tf.sqrt(tf.reduce_sum(tf.square(target_airy)))
-        self.target_airy_pad = pad_frac_tf(self.target_airy, self.corr_pad_frac)
+        #target_airy = (2*scsp.j1(Ra)/Ra)**2
+        #self.target_airy = target_airy/tf.sqrt(tf.reduce_sum(tf.square(target_airy)))
+        #self.target_airy_pad = pad_frac_tf(self.target_airy, self.corr_pad_frac)
 
-        sig_aprox=0.42*self.lam*self.t/D
-        self.airy_aprox_target = tf.exp(-(tf.square(self.xgm) + tf.square(self.ygm))/(2*tf.square(sig_aprox)))
+        #sig_aprox=0.42*self.lam*self.t/D
+        #self.airy_aprox_target = tf.exp(-(tf.square(self.xgm) + tf.square(self.ygm))/(2*tf.square(sig_aprox)))
 
-        self.airy_aprox_pad = pad_frac_tf(self.airy_aprox_target / tf.reduce_max(self.airy_aprox_target), self.corr_pad_frac)
+        #self.airy_aprox_pad = pad_frac_tf(self.airy_aprox_target / tf.reduce_max(self.airy_aprox_target), self.corr_pad_frac)
 
         if target_option=='airy':
             self.target_F = tf.square(tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.target_airy_pad), 
                                                                  tf.constant(0.,self.precision_tf)))))
         elif target_option=='gaussian':
             self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.airy_aprox_pad), tf.constant(0.,self.precision_tf))))
+        elif target_option == 'none':
+            self.target_F = []
         
         if self.loss_type is "psf_error":
             psf_in = psf_in = sc.io.loadmat(psf_file)
@@ -197,13 +199,13 @@ class Model(tf.keras.Model):
         
                                          
         #Mask for DC. Set to zero anywhere we want to ignore loss computation of power spectrum
-        dc_mask = np.ones_like(self.target_F.numpy())  
-        dc_mask[:3,:3] = 0
-        dc_mask[-2:,:1] = 0
-        dc_mask[:1,-2:] = 0
-        dc_mask[-2:,-2:]= 0
-        dc_mask = dc_mask * self.target_F.numpy()>(.001*np.max(self.target_F.numpy()))
-        self.dc_mask = tf.constant(dc_mask,self.precision_tf)
+#         dc_mask = np.ones_like(self.target_F.numpy())  
+#         dc_mask[:3,:3] = 0
+#         dc_mask[-2:,:1] = 0
+#         dc_mask[:1,-2:] = 0
+#         dc_mask[-2:,-2:]= 0
+#         dc_mask = dc_mask * self.target_F.numpy()>(.001*np.max(self.target_F.numpy()))
+#         self.dc_mask = tf.constant(dc_mask,self.precision_tf)
         
         # Use Zernike aberrations with random initialization 
         # Zernike 

@@ -213,9 +213,11 @@ def tf_exp(arg):
     return tf.complex(U_in_r,U_in_i)
     
 def tf_fftshift(spectrum):
-    spec_in=fftshift(spectrum,axis=0)
-    spec_out=fftshift(spec_in,axis=1)
-    return spec_out
+#     spec_in=fftshift(spectrum,axis=0)
+#     spec_out=fftshift(spec_in,axis=1)
+    return fftshift(fftshift(spectrum,axis=0),axis=1)
+def tf_fftshift2d(x):
+    return(tf.roll(x,shift=[tf.shape(x)[0]//2, tf.shape(x)[1]//2],axis=[0,1]))
     
 def fftshift(spectrum, axis=-1):
   try: 
@@ -243,13 +245,15 @@ def propagate_field_freq_tf(model,U,padfrac=0):
         Fx, Fy = tf.meshgrid(tf.lin_space(tf.reduce_min(model.Fx), tf.reduce_max(model.Fx), U.shape[1]), tf.lin_space(tf.reduce_min(model.Fy), tf.reduce_max(model.Fy), U.shape[0]))
         Fxn=Fx
         Fyn=Fy
+        Hf = tf_exp(2.*np.pi*model.t/model.lam * tf.sqrt(1-tf.square(model.lam*Fxn) - tf.square(model.lam*Fyn)))
     else:
-        Fxn=model.Fx
-        Fyn=model.Fy
-    Uf = tf_fftshift(tf.fft2d(tf_fftshift(U)))
+#         Fxn=model.Fx
+#         Fyn=model.Fy
+        Hf = tf_exp(2.*np.pi*model.t/model.lam * tf.sqrt(1-tf.square(model.lam*model.Fx) - tf.square(model.lam*model.Fy)))
+    Uf = tf_fftshift2d(tf.fft2d(tf_fftshift2d(U)))
 
-    Hf = tf_exp(2.*np.pi*model.t/model.lam * tf.sqrt(1-tf.square(model.lam*Fxn) - tf.square(model.lam*Fyn)))
-    Up = tf_fftshift(tf.ifft2d(tf_fftshift(Uf*Hf)))
+    
+    Up = tf_fftshift2d(tf.ifft2d(tf_fftshift2d(Uf*Hf)))
     if padfrac != 0:
         Up = crop2d(Up, shape_orig)
     return Up
