@@ -12,6 +12,11 @@ class Model(tf.keras.Model):
         # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
         self.precision_tf = precision_tf
+        if self.precision_tf is tf.float64:
+            self.cplx_dtype = tf.complex128
+        elif self.precision_tf is tf.float32:
+            self.cplx_dtype = tf.complex64
+            
         target_option = 'none'
         self.lenslet_spacing = lenslet_spacing
         self.loss_type = loss_type   #matrix_coherence: use cross corelations to design PSF
@@ -85,11 +90,7 @@ class Model(tf.keras.Model):
             
         self.min_offset= 0#-10e-3
         self.max_offset= 50
-        #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = self.precision_tf)
-        #self.lenslet_offset=tfe.Variable(tf.zeros(self.Nlenslets),name='offset', dtype = self.precision_tf,constraint=lambda t: tf.clip_by_value(t,self.min_offset, self.max_offset))
         
-        #initializing the x and y positions
-        #[xpos,ypos, rlist]=poissonsampling_circular(self)
         if self.lenslet_spacing is 'poisson':
             [xpos, ypos] = bridson_poisson_N(r1 = self.mean_lenslet_CA, 
                                          r2=.075e3,CA=self.CA,H=2*self.CA,W=2*self.CA,Nlenslets=self.Nlenslets)
@@ -108,18 +109,38 @@ class Model(tf.keras.Model):
         self.rlist = tfe.Variable(rlist,name='rlist', dtype = self.precision_tf,
                                   constraint=lambda t: tf.clip_by_value(t,self.min_r, self.max_r))
         
-        # Add variable for defocus as input to self.gen_psf_stack
-        
-        #self.rlist = tfe.Variable(rlist,name='rlist',dtype=self.precision_tf)
-        #self.xpos = tfe.Variable(xpos, name='xpos', dtype = self.precision_tf, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
-        #self.ypos = tfe.Variable(ypos, name='ypos', dtype = self.precision_tf, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
         self.xpos = tfe.Variable(xpos, name='xpos', dtype = self.precision_tf)
         self.ypos = tfe.Variable(ypos, name='ypos', dtype = self.precision_tf)
-        
-        self.defocus_offset = tfe.Variable(tf.zeros(self.Nz,self.precision_tf), name='defocus_offset', dtype = self.precision_tf,
-                                          constraint = lambda t: tf.clip_by_value(t,-1./100000,1./100000))
-        self.lenslet_offset=tf.Variable(tf.zeros(self.Nlenslets,self.precision_tf),name='lenslet_offset',dtype=self.precision_tf,
+               
+        self.defocus_offset = tfe.Variable(tf.zeros(self.Nz,self.precision_tf), name='defocus_offset',
+                                           dtype = self.precision_tf, 
+                                           constraint = lambda t: tf.clip_by_value(t,-1./100000,1./100000))
+        self.lenslet_offset=tf.Variable(tf.zeros(self.Nlenslets,self.precision_tf),
+                                        name='lenslet_offset',
+                                        dtype=self.precision_tf,
                                         constraint=lambda t: tf.clip_by_value(t,-4,5))
+                                    
+   
+        self.zernikes = zernikes
+        self.numzern = len(zernikes)
+
+        if aberrations == True:
+            zern_init = np.zeros((self.Nlenslets,self.numzern))    
+            self.zern_coefficients = tf.Variable(zern_init, 
+                                                 dtype=self.precision_tf, 
+                                                 name='zern_coefficients',
+                                                 constraint=lambda t: tf.clip_by_value(t,-1, 1))
+        else:
+            self.zern_coefficients = []
+        
+        self.atten = tf.Variable(0.,
+                                 self.precision_tf,
+                                 constraint = lambda t: tf.clip_by_value(t,-.1,.1))
+#         self.lenslet_attenuation = tf.Variable(tf.ones(self.Nlenslets,self.precision_tf),
+#                                                dtype = self.precision_tf,
+#                                                constraint = lambda t: tf.clip_by_value(t,.3, 1))
+        
+        
         #parameters for making the lenslet surface
         self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=self.precision_tf)
         self.xg=tf.constant(np.linspace(self.xgrng[0], self.xgrng[1], self.samples[1]),dtype=self.precision_tf)
@@ -146,9 +167,20 @@ class Model(tf.keras.Model):
         self.k = tf.constant(np.pi*2./self.lam)
         
         #Compute frequency grid
-        fx = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[1]),dtype=self.precision_tf)
-        fy = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[0]),dtype=self.precision_tf)
-        self.Fx,self.Fy = tf.meshgrid(fx,fy)
+#         fx = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[1]),dtype=self.precision_tf)
+#         fy = tf.constant(np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[0]),dtype=self.precision_tf)
+#         self.Fx,self.Fy = tf.meshgrid(fx,fy)
+        
+        #self.Hf = tf_exp(2.*np.pi*self.t/self.lam * tf.sqrt(1-tf.square(self.lam*self.Fx) - tf.square(self.lam*self.Fy)))
+        fx = np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[1])
+        fy = np.linspace(-1./(2.*self.ps),1./(2.*self.ps),self.samples[0])
+        Fx,Fy = np.meshgrid(fx,fy)
+
+
+        Hf = np.fft.fftshift(
+            np.exp(1j*2.*np.pi*self.t/self.lam.numpy() * np.sqrt(1-(self.lam.numpy()*Fx)**2 - (self.lam.numpy()*Fy)**2))
+        )
+        self.Hf = tf.constant(Hf,self.cplx_dtype)
         
         # Field point to consider during modeling
         self.field_list = tf.constant(np.array((0., 0.)),self.precision_tf)
@@ -209,20 +241,7 @@ class Model(tf.keras.Model):
         
         # Use Zernike aberrations with random initialization 
         # Zernike 
-        self.zernikes = zernikes
-        self.numzern = len(zernikes)
 
-        if aberrations == True:
-            zern_init = np.zeros((self.Nlenslets,self.numzern))
-#             for i in range(self.Nlenslets):
-#                 aberrations = np.zeros(self.numzern)
-#                 zern_init.append(aberrations)
-    
-            self.zern_coefficients = tf.Variable(zern_init, 
-                                                 dtype=self.precision_tf, 
-                                                 name='zern_coefficients',constraint=lambda t: tf.clip_by_value(t,-1, 1))
-        else:
-            self.zern_coefficients = []
             
         
         
@@ -339,7 +358,7 @@ class Model(tf.keras.Model):
         for z in range(0, tf.size(zplanes)):
             
            # zstack.append(gen_psf_ag_tf(T,self,zplanes[z],'angle',0., prop_pad,Grin=self.Grin[z]))
-            zstack.append(gen_psf_ag_tf(T,self,zplanes[z],'angle',0., prop_pad,Grin=0,normalize=self.psf_norm))
+            zstack.append(gen_psf_ag_tf(T,self,zplanes[z],'angle',0., prop_pad,Grin=0,normalize=self.psf_norm,amp=aper))
 
         return zstack
     

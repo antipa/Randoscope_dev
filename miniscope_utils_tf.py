@@ -112,15 +112,8 @@ def poissonsampling_circular(model):
 def make_lenslet_tf_zern(model):
     T = tf.zeros([model.samples[0],model.samples[1]],model.precision_tf)
     
-#     if np.shape(model.zern_coefficients) != (): 
-#         T_orig = tf.zeros([model.samples[0],model.samples[1]],tf.float64)
-#     else:
-#         T_orig = []
-    
     for n in range(model.Nlenslets):
-        #sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm- model.xpos[n]))- tf.square((model.ygm-model.ypos[n])))
-                                          #)-tf.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
-            
+       
         sphere = tf.real(tf.sqrt(
             tf.square(model.rlist[n])
             - tf.square((model.xgm-model.xpos[n]))
@@ -142,39 +135,54 @@ def make_lenslet_tf_zern(model):
             
 
             sph1 += Z
-
+        #mask = tf.cast(int(sph1>=T),model.precision_tf)*model.
         T = tf.maximum(T,sph1)
             
         
-    aper = tf.sqrt(model.xgm**2+model.ygm**2) <= model.CA
+    aper = tf.exp(-model.atten*T)*tf.cast(tf.sqrt(model.xgm**2+model.ygm**2) <= model.CA,model.precision_tf)
     return T, aper
 
 
 def zernike_evaluate(coefficients, indices, x, y):
+#     zernike_polynomials = [
+#            lambda x,y,r: 1,                                    # 0: piston
+#            lambda x,y,r: 2.*y,                                 # 1: tilt
+#            lambda x,y,r: 2.*x,                                 # 2: tilt 
+#            lambda x,y,r: 2.*np.sqrt(6.)*x*y,                   # 3: astigmatism 
+#            lambda x,y,r: np.sqrt(3.)*(2.*tf.square(r)-1.),     # 4: defocus
+#            lambda x,y,r: np.sqrt(6.)*(x**2-y**2),              # 5: astigmatism 
+#            lambda x,y,r: np.sqrt(8.)*y*(3*x**2-y**2),          # 6: trefoil
+#            lambda x,y,r: np.sqrt(8.)*y*(3*r**2-2),             # 7: coma
+#            lambda x,y,r: np.sqrt(8.)*x*(3*r**2-2),             # 8: coma
+#            lambda x,y,r: np.sqrt(8.)*x*(x**2-3*y**2),          # 9: trefoil
+#            lambda x,y,r: np.sqrt(10.)*4*x*y*(x**2-y**2),        # 10: Oblique quad
+#            lambda x,y,r: np.sqrt(10.)*2*x*y*(4*x**2 + 4*y**2 - 3), #11: O sec. astig
+#            lambda x,y,r: np.sqrt(5.)*(6*r**4 - 6*r**2 + 1),     #12: spherical
+#            lambda x,y,r: np.sqrt(10.)*(4*(x**4 - y**4) + 3*(y**2-x**2))] #13
     zernike_polynomials = [
            lambda x,y,r: 1,                                    # 0: piston
            lambda x,y,r: 2.*y,                                 # 1: tilt
            lambda x,y,r: 2.*x,                                 # 2: tilt 
            lambda x,y,r: 2.*np.sqrt(6.)*x*y,                   # 3: astigmatism 
-           lambda x,y,r: np.sqrt(3.)*(2.*tf.square(r)-1.),     # 4: defocus
+           lambda x,y,r: np.sqrt(3.)*(2.*r-1.),     # 4: defocus
            lambda x,y,r: np.sqrt(6.)*(x**2-y**2),              # 5: astigmatism 
            lambda x,y,r: np.sqrt(8.)*y*(3*x**2-y**2),          # 6: trefoil
-           lambda x,y,r: np.sqrt(8.)*y*(3*r**2-2),             # 7: coma
-           lambda x,y,r: np.sqrt(8.)*x*(3*r**2-2),             # 8: coma
+           lambda x,y,r: np.sqrt(8.)*y*(3*r-2),             # 7: coma
+           lambda x,y,r: np.sqrt(8.)*x*(3*r-2),             # 8: coma
            lambda x,y,r: np.sqrt(8.)*x*(x**2-3*y**2),          # 9: trefoil
            lambda x,y,r: np.sqrt(10.)*4*x*y*(x**2-y**2),        # 10: Oblique quad
-           lambda x,y,r: np.sqrt(10.)*2*x*y*(4*x**2 + 4*y**2 - 3), #11: O sec. astig
-           lambda x,y,r: np.sqrt(5.)*(6*r**4 - 6*r**2 + 1),     #12: spherical
+           lambda x,y,r: np.sqrt(10.)*2*x*y*(4*r - 3), #11: O sec. astig
+           lambda x,y,r: np.sqrt(5.)*(6*r**2 - 6*r + 1),     #12: spherical
            lambda x,y,r: np.sqrt(10.)*(4*(x**4 - y**4) + 3*(y**2-x**2))] #13
         
     
     
-    r = tf.sqrt(tf.square(x) + tf.square(y))
-    mask = tf.cast(r<=1,x.dtype)
+    r2 = tf.square(x) + tf.square(y)
+    mask = tf.cast(r2<=1,x.dtype)
     ZN = 0
     for i in range(len(indices)):
         
-        ZN = ZN + mask*coefficients[i]*zernike_polynomials[indices[i]](x,y,r)
+        ZN = ZN + mask*coefficients[i]*zernike_polynomials[indices[i]](x,y,r2)
         
     return ZN
 
@@ -247,7 +255,7 @@ def propagate_field_freq_tf(model,U,padfrac=0):
         Fyn=Fy
         Hf = tf_exp(2.*np.pi*model.t/model.lam * tf.sqrt(1-tf.square(model.lam*Fxn) - tf.square(model.lam*Fyn)))
     else:
-#         Fxn=model.Fx
+ #        Fxn=model.Fx
 #         Fyn=model.Fy
         Hf = tf_exp(2.*np.pi*model.t/model.lam * tf.sqrt(1-tf.square(model.lam*model.Fx) - tf.square(model.lam*model.Fy)))
     Uf = tf_fftshift2d(tf.fft2d(tf_fftshift2d(U)))
@@ -257,8 +265,11 @@ def propagate_field_freq_tf(model,U,padfrac=0):
     if padfrac != 0:
         Up = crop2d(Up, shape_orig)
     return Up
+def propagate_field_H_tf(model, U,padfrac=0):
+    # Uses 0 frequency in upper left to save memory
+    return(tf_fftshift2d(tf.ifft2d(tf.fft2d(tf_fftshift2d(U)) * model.Hf)))
 
-def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0,normalize='l1'):  #check negatives in exponents
+def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0,normalize='l1',amp = -1):  #check negatives in exponents
     # Inputs:
     # surface: single surface thickness function, units: mm
     # ior : index of refraction of bulk material
@@ -290,13 +301,13 @@ def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0,nor
             U_in = tf_exp(1*-z_dis*model.k*tf.sqrt(1-tf.square((model.xgm-model.field_list[0])/z_dis) - tf.square((model.ygm-model.field_list[1])/z_dis)))
     
     U_out = U_in * tf_exp((model.k*(model.ior-1)*T + pupil_phase))
-    amp = tf.cast(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA, model.precision_tf)
-    if model.precision_tf is tf.float64:
-        cplx_dtype = tf.complex128
-    elif model.precision_tf is tf.float32:
-        cplx_dtype = tf.complex64
+    if amp is -1:
+        amp = tf.cast(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA, model.precision_tf)
         
-    U_prop = propagate_field_freq_tf(model, tf.cast(tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp),cplx_dtype), prop_pad)    
+
+        
+    #U_prop = propagate_field_freq_tf(model, tf.cast(tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp),model.cplx_dtype), prop_pad)    
+    U_prop = propagate_field_H_tf(model, tf.cast(tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp),model.cplx_dtype))
     psf = tf.square(tf.abs(U_prop))
     if normalize == 'l2':
         return(psf/tf.sqrt(tf.reduce_sum(tf.square(psf)))) #DO WE NEED TO DO THIS????
