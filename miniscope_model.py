@@ -26,7 +26,8 @@ class Model(tf.keras.Model):
         self.mag = 6.1   #System magnification
 
         #self.samples = (512,512)  #Grid for PSF simulation
-        self.samples = (972,1296)  #Grid for PSF simulation
+#        self.samples = (972,1296)  #Grid for PSF simulation
+        self.samples = (486,648)
         #self.samples = (1024,1024)
         lam = 510e-3
         self.lam=tf.constant(lam,dtype=self.precision_tf)
@@ -135,7 +136,7 @@ class Model(tf.keras.Model):
         
         self.atten = tf.Variable(0.,
                                  self.precision_tf,
-                                 constraint = lambda t: tf.clip_by_value(t,-.1,.1))
+                                 constraint = lambda t: tf.clip_by_value(t,0,.1))
 #         self.lenslet_attenuation = tf.Variable(tf.ones(self.Nlenslets,self.precision_tf),
 #                                                dtype = self.precision_tf,
 #                                                constraint = lambda t: tf.clip_by_value(t,.3, 1))
@@ -180,6 +181,8 @@ class Model(tf.keras.Model):
         Hf = np.fft.fftshift(
             np.exp(1j*2.*np.pi*self.t/self.lam.numpy() * np.sqrt(1-(self.lam.numpy()*Fx)**2 - (self.lam.numpy()*Fy)**2))
         )
+        Rf = np.sqrt(Fx**2 + Fy**2);
+        Hf[Rf>=(1/self.lam)] = 0;
         self.Hf = tf.constant(Hf,self.cplx_dtype)
         
         # Field point to consider during modeling
@@ -321,7 +324,7 @@ class Model(tf.keras.Model):
 #                                              +tf.reduce_sum(tf.abs(diff_tf(zstack[n] - self.target_psf[n],1)))
 #                                              +tf.reduce_sum(tf.abs(zstack[n] - self.target_psf[n])))
 #                                                 for n in range(self.Nz)] 
-            Rmat_tf_diag = [tf.reduce_sum(tf.abs(zstack[n] - self.target_psf[n])) for n in range(self.Nz)] 
+            Rmat_tf_diag = [tf.sqrt(tf.reduce_sum(tf.square(zstack[n] - self.target_psf[n]))) for n in range(self.Nz)] 
 
 
         Rmat_tf = tf.concat([Rmat_tf_diag, Rmat_tf_off_diag],0)  

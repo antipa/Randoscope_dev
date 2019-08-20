@@ -158,7 +158,7 @@ def zernike_evaluate(coefficients, indices, x, y):
 #            lambda x,y,r: np.sqrt(10.)*4*x*y*(x**2-y**2),        # 10: Oblique quad
 #            lambda x,y,r: np.sqrt(10.)*2*x*y*(4*x**2 + 4*y**2 - 3), #11: O sec. astig
 #            lambda x,y,r: np.sqrt(5.)*(6*r**4 - 6*r**2 + 1),     #12: spherical
-#            lambda x,y,r: np.sqrt(10.)*(4*(x**4 - y**4) + 3*(y**2-x**2))] #13
+#            lambda x,y,r: np.sqrt(10.)*(4*(x**4 - y**4) + 3*(y**2-x**2))] #13  
     zernike_polynomials = [
            lambda x,y,r: 1,                                    # 0: piston
            lambda x,y,r: 2.*y,                                 # 1: tilt
@@ -171,9 +171,10 @@ def zernike_evaluate(coefficients, indices, x, y):
            lambda x,y,r: np.sqrt(8.)*x*(3*r-2),             # 8: coma
            lambda x,y,r: np.sqrt(8.)*x*(x**2-3*y**2),          # 9: trefoil
            lambda x,y,r: np.sqrt(10.)*4*x*y*(x**2-y**2),        # 10: Oblique quad
-           lambda x,y,r: np.sqrt(10.)*2*x*y*(4*r - 3), #11: O sec. astig
+           lambda x,y,r: np.sqrt(10.)*2*x*y*(4*r - 3),        #11: O. s. astig
            lambda x,y,r: np.sqrt(5.)*(6*r**2 - 6*r + 1),     #12: spherical
-           lambda x,y,r: np.sqrt(10.)*(4*(x**4 - y**4) + 3*(y**2-x**2))] #13
+           lambda x,y,r: np.sqrt(10.)*(4*(x**4 - y**4) + 3*(y**2-x**2)), #13 vert s. astig
+           lambda x,y,r: np.sqrt(10.)*(r**2 - 8*x**2*y**2)]    #14: vert quad
         
     
     
