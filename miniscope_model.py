@@ -8,7 +8,7 @@ import cv2
 
 
 class Model(tf.keras.Model):
-    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_meas/zstack_sim_test.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson', Nlenslets = 'auto',incoherent_source = False,precision_tf=tf.float32):   #'log_sum_exp'
+    def __init__(self,target_res=0.005,lenslet_CA=0.165,zsampling = 'uniform_random', cross_corr_norm = 'log_sum_exp', aberrations = False,GrinAber='',GrinDictName='', zernikes = [],psf_norm = 'l1',logsumparam = 1e-2,psf_scale=1e2,psf_file = "../psf_meas/zstack_sim_test.mat",loss_type = "matrix_coherence",lenslet_spacing = 'poisson', Nlenslets = 'auto',incoherent_source = False,precision_tf=tf.float32,lam = 510e-3):   #'log_sum_exp'
         # psf_scale: scale all PSFS by this constant after normalizing
         super(Model, self).__init__()
         self.precision_tf = precision_tf
@@ -26,10 +26,11 @@ class Model(tf.keras.Model):
         self.mag = 6.1   #System magnification
 
         #self.samples = (512,512)  #Grid for PSF simulation
-#        self.samples = (972,1296)  #Grid for PSF simulation
-        self.samples = (486,648)
+        #self.samples = (972,1296)  #Grid for PSF simulation
+        #self.samples = (972*2, 1296*2)
+        self.samples = (486*4,648*4)
         #self.samples = (1024,1024)
-        lam = 510e-3
+        
         self.lam=tf.constant(lam,dtype=self.precision_tf)
         
         if GrinAber:
@@ -58,8 +59,8 @@ class Model(tf.keras.Model):
         self.cmax = 1/self.Rmin
         #self.xgrng = np.array((-2851.2, 2851.2)).astype('float32')    #Range, in mm, of grid of the whole plane (not just grin)
         #self.ygrng = np.array((-2138.4,2138.4)).astype('float32')
-        self.xgrng = np.array((-2592*2.2/4, 2592*2.2/4))
-        self.ygrng = np.array((-2138.4/2,2138.4/2))
+        self.xgrng = np.array((-2592*2.2/4*2, 2592*2.2/4*2))
+        self.ygrng = np.array((-2138.4/2*2,2138.4/2*2))
         #self.xgrng = np.array((-1.8,1.8)).astype('float32')
         #self.ygrng = np.array((-1.8,1.8)).astype('float32')
 
@@ -325,6 +326,8 @@ class Model(tf.keras.Model):
 #                                              +tf.reduce_sum(tf.abs(zstack[n] - self.target_psf[n])))
 #                                                 for n in range(self.Nz)] 
             Rmat_tf_diag = [tf.sqrt(tf.reduce_sum(tf.square(zstack[n] - self.target_psf[n]))) for n in range(self.Nz)] 
+        elif self.loss_type is "none":
+            Rmat_tf_diat = [[0.] for n in range(self.Nz)]
 
 
         Rmat_tf = tf.concat([Rmat_tf_diag, Rmat_tf_off_diag],0)  
