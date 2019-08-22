@@ -28,7 +28,7 @@ class Model(tf.keras.Model):
         #self.samples = (512,512)  #Grid for PSF simulation
         #self.samples = (972,1296)  #Grid for PSF simulation
         #self.samples = (972*2, 1296*2)
-        self.samples = (486*4,648*4)
+        self.samples = (486*8,648*8)
         #self.samples = (1024,1024)
         
         self.lam=tf.constant(lam,dtype=self.precision_tf)
