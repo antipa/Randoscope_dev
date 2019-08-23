@@ -18,19 +18,10 @@ else
     ds = 1;
 end
 num_planes = length(k_list);
-if info(1).SamplesPerPixel == 1
-    
-    stack = zeros(info(1).Height/ds, info(1).Width/ds,num_planes);
-else
-    stack = zeros(info(1).Height/ds, info(1).Width/ds,info(1).SamplesPerPixel,num_planes);
-end
+stack = zeros(info(1).Height/ds, info(1).Width/ds, num_planes);
 n = 0;
 for k = k_list
     n = n+1;
-    if info(1).SamplesPerPixel == 1
-        stack(:,:,n) = imresize(imread(path, k, 'Info', info),1/ds,'box');
-    else
-        stack(:,:,:,n) = imresize(imread(path, k, 'Info', info),1/ds,'box');
-    end
+    stack(:,:,n) = imresize(imread(path, k, 'Info', info),1/ds,'box');
     
 end
