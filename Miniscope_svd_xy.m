@@ -15,7 +15,7 @@ function [comps, weights_interp, weights,shifts,yi_reg_out] = Miniscope_svd_xy(s
 % Also returns cell array of shifts found in registration
 % Returns yi_reg_out, an 8-bit image of each psf after registration. This
 % is just for visual inspection!
-
+vec = @(x)x(:);
 p = inputParser;
 addParameter(p,'boundary_condition','circular')
 parse(p,varargin{:})

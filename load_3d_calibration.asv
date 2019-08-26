@@ -1,6 +1,6 @@
 % Loads in calibration data and removes background
 
-data_dir = 'Q:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\4_8umPsf_20umg_1'
+data_dir = 'Q:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\4_8umPsf_20um_82219_1'
 
 file_type = '.ome'
 
@@ -45,7 +45,7 @@ end
 
 psf_files_sorted = psf_files(psf_sort);
 Nxy = 192;
-zcount = 0;
+zcount = 1;
 psfs = struct('xystack',[]);
 ds = 2;
 info = imfinfo([data_dir,'\',psf_files(1).name]);
@@ -67,11 +67,12 @@ rnk=24;
 comps_out = zeros(Ny,Nx,rnk,1);
 weights_out = zeros(Ny,Nx,rnk,1);
 %%
+axial_stack = zeros(Ny,Nx,Nz);
 for n = 1:length(psf_files_sorted)
     
     if mod(n,Nxy)==1
         zcount = zcount+1;
-        psfs(zcount).xystack = zeros(Ny,Nx,Nc,Nxy);
+        psfs.xystack = zeros(Ny,Nx,Nc,Nxy);
         xycount = 0;
         
     end
@@ -79,16 +80,19 @@ for n = 1:length(psf_files_sorted)
     
     
     xycount=xycount + 1;
+    % Load and average in time dimension
     psf_in = squeeze(mean(read_tiff_stack([data_dir,'\',psf_files_sorted(n).name],ds),4));
-    psfs(zcount).xystack(:,:,:,xycount) = psf_in;
-    imagesc(psfs(zcount).xystack(:,:,:,xycount)/100), axis image
+    
+    % 
+    psfs.xystack(:,:,:,xycount) = psf_in;
+    imagesc(psfs).xystack(:,:,:,xycount)/100), axis image
     title(sprintf('Image number %i, xyindex %i',n,xycount))    
     drawnow
     if xycount == Nxy
         % Average across color channels to make 3d stack
-        stack_mono = squeeze(mean(double(psfs(zcount).xystack) - bck_files_sorted(2*zcount).bck,3));   %2 because there are 2 bck files per z plane
+        stack_mono = squeeze(mean(double(psfs.xystack) - bck_files_sorted(2*zcount).bck,3));   %2 because there are 2 bck files per z plane
         icenter = 89;
-        ref_im = mean(double(psfs(zcount).xystack(:,:,:,icenter) - bck_files_sorted(2*zcount-1).bck),3);
+        ref_im = mean(double(psfs.xystack(:,:,:,icenter) - bck_files_sorted(2*zcount-1).bck),3);
         
         [comps, weights_interp, weights,shifts,yi_reg_out] = Miniscope_svd_xy(stack_mono,ref_im,rnk,'boundary_condition','circular');
         if zcount == 1
