@@ -45,7 +45,7 @@ end
 
 psf_files_sorted = psf_files(psf_sort);
 Nxy = 192;
-zcount = 1;
+
 psfs = struct('xystack',[]);
 ds = 2;
 info = imfinfo([data_dir,'\',psf_files(1).name]);
@@ -66,50 +66,123 @@ end
 rnk=24;
 comps_out = zeros(Ny,Nx,rnk,1);
 weights_out = zeros(Ny,Nx,rnk,1);
-%%
-axial_stack = zeros(Ny,Nx,Nz);
+%% Prepare list of files per depth
+zcount = 0;
+psf_files_z = struct('XYnames',{});
+
 for n = 1:length(psf_files_sorted)
     
     if mod(n,Nxy)==1
         zcount = zcount+1;
-        psfs.xystack = zeros(Ny,Nx,Nc,Nxy);
         xycount = 0;
         
     end
     
     
     
-    xycount=xycount + 1;
+    
+%     if psf_files_sorted(n).order ~= 6721
     % Load and average in time dimension
-    psf_in = squeeze(mean(read_tiff_stack([data_dir,'\',psf_files_sorted(n).name],ds),4));
+    xycount=xycount + 1;
+    psf_files_z(zcount).XYnames{xycount} = psf_files_sorted(n).name;
+%     end
+    %psf_in = squeeze(mean(read_tiff_stack([data_dir,'\',psf_files_sorted(n).name],ds),4));
     
     % 
-    psfs.xystack(:,:,:,xycount) = psf_in;
-    imagesc(psfs).xystack(:,:,:,xycount)/100), axis image
-    title(sprintf('Image number %i, xyindex %i',n,xycount))    
-    drawnow
-    if xycount == Nxy
-        % Average across color channels to make 3d stack
-        stack_mono = squeeze(mean(double(psfs.xystack) - bck_files_sorted(2*zcount).bck,3));   %2 because there are 2 bck files per z plane
-        icenter = 89;
-        ref_im = mean(double(psfs.xystack(:,:,:,icenter) - bck_files_sorted(2*zcount-1).bck),3);
-        
-        [comps, weights_interp, weights,shifts,yi_reg_out] = Miniscope_svd_xy(stack_mono,ref_im,rnk,'boundary_condition','circular');
-        if zcount == 1
-            comps_out(:,:,:,1) = comps;
-            weights_out(:,:,:,1) = weights_out;
-        else
-            comps_out = cat(4,comps_out,comps);
-            weights_out = cat(4,weights_out,weights_interp);
-        end
-        
-    end
+   
+%     if psf_files_sorted(n).order == 6721
+%         xycount = xycount+1;
+%     end
+
 end
+
+
+
 %%
 
+for zcount = 1:length(psf_files_z)
+   psfs.xystack = zeros(Ny,Nx,Nc,Nxy);
+   for xycount = 1:length(psf_files_z(zcount).XYnames) 
+        psf_in = squeeze(mean(read_tiff_stack([data_dir,'\',psf_files_z(zcount).XYnames{xycount}],ds),4));
+        psfs.xystack(:,:,:,xycount) = psf_in;
+        fprintf('Z: %i \t XY %i\n',zcount,xycount)
+        fprintf(['image ',psf_files_z(zcount).XYnames{xycount},'\n'])
+        imagesc(psfs.xystack(:,:,:,xycount)/100), axis image
+        title(sprintf('Z %i, xyindex %i',zcount,xycount))
+        drawnow
+   end
+   stack_mono = squeeze(mean(double(psfs.xystack) - bck_files_sorted(2*zcount).bck,3));   %2 because there are 2 bck files per z plane
+   icenter = 89;
+   ref_im = mean(double(psfs.xystack(:,:,:,icenter) - bck_files_sorted(2*zcount-1).bck),3);
+   
+   [comps, weights_interp, weights,shifts,yi_reg_out] = Miniscope_svd_xy(stack_mono,ref_im,rnk,'boundary_condition','circular');
+   if zcount == 1
+       comps_out(:,:,:,1) = comps;
+       weights_out(:,:,:,1) = weights_interp;
+       axial_stack = ref_im;
+   else
+       comps_out = cat(4,comps_out,comps);
+       weights_out = cat(4,weights_out,weights_interp);
+       axial_stack = cat(3,axial_stack,ref_im);
+   end
+end
+
+% for n = 1:length(psf_files_sorted)
+%     
+%     if mod(n,Nxy)==1
+%         zcount = zcount+1;
+%         psfs.xystack = zeros(Ny,Nx,Nc,Nxy);
+%         xycount = 0;
+%         
+%     end
+%     
+%     
+%     
+%     xycount=xycount + 1;
+%     % Load and average in time dimension
+%     %psf_file_z(zcount).
+%     %psf_in = squeeze(mean(read_tiff_stack([data_dir,'\',psf_files_sorted(n).name],ds),4));
+%     
+%     % 
+%     psfs.xystack(:,:,:,xycount) = psf_in;
+%     imagesc(psfs.xystack(:,:,:,xycount)/100), axis image
+%     title(sprintf('Image number %i, xyindex %i',n,xycount))    
+%     drawnow
+%     if psf_files_sorted(n).order == 6336
+%         xycount = xycount+1;
+%     end
+%     if xycount == Nxy
+%         % Average across color channels to make 3d stack
+%         stack_mono = squeeze(mean(double(psfs.xystack) - bck_files_sorted(2*zcount).bck,3));   %2 because there are 2 bck files per z plane
+%         icenter = 89;
+%         ref_im = mean(double(psfs.xystack(:,:,:,icenter) - bck_files_sorted(2*zcount-1).bck),3);
+%         
+%         [comps, weights_interp, weights,shifts,yi_reg_out] = Miniscope_svd_xy(stack_mono,ref_im,rnk,'boundary_condition','circular');
+%         if zcount == 1
+%             comps_out(:,:,:,1) = comps;
+%             weights_out(:,:,:,1) = weights_interp;
+%             axial_stack = ref_im;
+%         else
+%             comps_out = cat(4,comps_out,comps);
+%             weights_out = cat(4,weights_out,weights_interp);
+%             axial_stack = cat(3,axial_stack,ref_im);
+%         end
+%        
+%     end
+% end
+%%
+imagesc(weights_out(:,:,1,10))
+
+axis image
+drawnow
 
 % for n = 1:length(bck_files)
 %     n
 %     bck_files_sorted(n).bck = mean(double(read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2)),4);
 % end
 
+%%
+for n = 1:length(psf_files_sorted)
+   psf_files_sorted(n).name
+   pause(1/30)
+end
