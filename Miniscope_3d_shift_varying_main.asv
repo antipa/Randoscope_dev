@@ -22,7 +22,7 @@ for zd = 9
     bg_path = 'D:\Kyrollos\RandoscopeNanoscribe\measurements';
 
     params.data_tiff_format = 'time';   %Use 'time' if tiff stacks are at the same location over time, use 'z' if they are z stacks'
-    params.tiff_color = 2;    %use 'rgb' or 'mono'. Use number (1,2,3) for r,g, or b only
+    params.tiff_color = '';    %use 'rgb' or 'mono'
     params.meas_depth = zd;    %If using 3D tiff or list of files, which slice was processed?
     params.tiff_slice = 'all';   %Slices to load from tiff stack. If 'all' used, it will average. 
     params.ds_z = 1;   %z downsampling ratio
@@ -88,8 +88,7 @@ for zd = 9
         bg = mean(bg_in,3);   %Average out color. Change to (:,:,color) to select one channel
     elseif isnumeric(params.tiff_color)
         data = data_raw(:,:,params.tiff_color);
-        bg = bg_in(:,:,params.tiff_color);
-    end
+        bg
     data = data - bg - params.meas_bias;
     b = data/max(data(:));
 
