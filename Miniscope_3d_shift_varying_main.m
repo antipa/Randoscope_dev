@@ -16,10 +16,10 @@ weights_in = load(weights_path);
 %%
 
 for zd = 9
-    %data_path = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\real_res_target_10um_1';   %<--folder where the measurements are
-    %bg_path = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\bck_real_res_target_10um_1';
-    data_path = 'D:\Kyrollos\RandoscopeNanoscribe\measurements';
-    bg_path = 'D:\Kyrollos\RandoscopeNanoscribe\measurements';
+    data_path = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\real_res_target_10um_1';   %<--folder where the measurements are
+    bg_path = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\bck_real_res_target_10um_1';
+    %data_path = 'D:\Kyrollos\RandoscopeNanoscribe\measurements';
+    %bg_path = 'D:\Kyrollos\RandoscopeNanoscribe\measurements';
 
     params.data_tiff_format = 'time';   %Use 'time' if tiff stacks are at the same location over time, use 'z' if they are z stacks'
     params.tiff_color = 2;    %use 'rgb' or 'mono'. Use number (1,2,3) for r,g, or b only
@@ -36,10 +36,10 @@ for zd = 9
     useGpu = 1; %cannot fit ds=2 on gpu unless we limit z range!!!!
     params.psf_norm = 'fro';   %Use max, slice, fro, or none
 
-    %meas_name = ['real_res_target_10um_1_MMStack_Img_',num2str(params.meas_depth),'_000_000.ome.tif'];    %<--- name of measurement
-    %bg_name = ['bck_real_res_target_10um_1_MMStack_Img_',num2str(params.meas_depth),'_000_000.ome.tif'];
-    meas_name = 'worminwater_konlin_2_1_MMStack_Default.ome.tif';
-    bg_name = 'worminwater_konlin_2_bck_1_MMStack_Default.ome.tif';
+    meas_name = ['real_res_target_10um_1_MMStack_Img_',num2str(params.meas_depth),'_000_000.ome.tif'];    %<--- name of measurement
+    bg_name = ['bck_real_res_target_10um_1_MMStack_Img_',num2str(params.meas_depth),'_000_000.ome.tif'];
+    %meas_name = 'worminwater_konlin_2_1_MMStack_Default.ome.tif';
+    %bg_name = 'worminwater_konlin_2_bck_1_MMStack_Default.ome.tif';
     
     meas_path = [data_path,'/',meas_name];
     bg_path = [bg_path,'/',bg_name];
@@ -147,7 +147,7 @@ for zd = 9
     options.convTol = 15e-12;
 
     %options.xsize = [256,256];
-    options.maxIter = 10000;
+    options.maxIter = 5000;
     options.residTol = 5e-5;
     options.momentum = 'nesterov';
     options.disp_figs = 1;
@@ -273,7 +273,7 @@ for zd = 9
 
     fprintf('writing .mat\n')
     options.fighandle = []
-    save([full_path,'/',meas_name(1:end-4),'_',date_string,'.mat'], 'tau_iso','TVpars','xhat', 'options', 'h', 'b','params')
+    save([full_path,'/',meas_name(1:end-4),'_',date_string,'.mat'], 'tau_iso','TVpars','xhat', 'options', 'comps_path','weights_path', 'b','params')
     fprintf('done writing .mat\n')
     if params.ds == 2
         gpuDevice(1)
