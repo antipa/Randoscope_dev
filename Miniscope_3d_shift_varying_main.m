@@ -6,7 +6,8 @@
 
 %psf_path = 'D:\Kyrollos\RandoscopeNanoscribe\RandoscopeNanoscribe\Miniscope3D\psf_svd_12comps_23z_240xy_20190619';
 %psf_path = 'D:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1';
-psf_path = 'D:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1_green_channel';
+
+psf_path = 'T:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1_green_channel';
 comps_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_components_green.mat'];
 weights_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_weights_interp_green.mat'];
 
@@ -15,12 +16,28 @@ weights_in = load(weights_path);
 
 %%
 
+[meas_name,data_path,~] = uigetfile('*.*','Select measurement','T:\Randoscope\RandoscopeV2_data');
+[bg_name, bg_path,~] = uigetfile('*.*',['Select background for ',meas_name],fullfile([data_path,'../']));
+
+meas_path = [data_path,meas_name];
+bg_path = [bg_path,bg_name];
+
+%%
+
+%Waterbear_20190905\waterbear_big_lastone_20_3_30ms';
+%bg_path = 'D:\Randoscope\RandoscopeV2_data\Waterbear_20190905\waterbear_big_lastone_bck_20_3_30ms_1';
+ %= 'waterbear_big_lastone_3_MMStack_Default.ome.tif';
+%bg_name = 'waterbear_big_lastone_bck_20_3_30ms_1_MMStack_Default.ome.tif';
+
+
+%%
+    
+
 for zd = 9
     
     %data_path = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\real_res_target_10um_1';   %<--folder where the measurements are
     %bg_path = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\bck_real_res_target_10um_1';
-    data_path = 'D:\Randoscope\RandoscopeV2_data\Waterbear_20190905\waterbear_big_lastone_20_3_30ms';
-    bg_path = 'D:\Randoscope\RandoscopeV2_data\Waterbear_20190905\waterbear_big_lastone_bck_20_3_30ms_1';
+   
     
     params.data_tiff_format = 'time';   %Use 'time' if tiff stacks are at the same location over time, use 'z' if they are z stacks'
     params.tiff_color = 2;    %use 'rgb' or 'mono'. Use number (1,2,3) for r,g, or b only
@@ -39,11 +56,9 @@ for zd = 9
     
     %meas_name = ['real_res_target_10um_1_MMStack_Img_',num2str(params.meas_depth),'_000_000.ome.tif'];    %<--- name of measurement
     %bg_name = ['bck_real_res_target_10um_1_MMStack_Img_',num2str(params.meas_depth),'_000_000.ome.tif'];
-    meas_name = 'waterbear_big_lastone_3_MMStack_Default.ome.tif';
-    bg_name = 'waterbear_big_lastone_bck_20_3_30ms_1_MMStack_Default.ome.tif';
+  
     
-    meas_path = [data_path,'/',meas_name];
-    bg_path = [bg_path,'/',bg_name];
+
     
     
     % Make sure h and weights are in order y,x,z,rank
@@ -82,7 +97,7 @@ for zd = 9
     
     % Read in data
     bg_raw = read_tiff_stack(bg_path,params.ds_meas);
-    for tiff_slice = 2:100
+    for tiff_slice = 101:150
         params.tiff_slice = tiff_slice;   %Slices to load from tiff stack. If 'all' used, it will average.
         switch lower(params.data_tiff_format)
             case('z')
