@@ -52,40 +52,54 @@ for m = 1:M
     stack(:,:,m) = stack(:,:,m)/stack_norm(m);
     
 end
+ref_im = ref_im/norm(ref_im,'fro');
 si = cell(1,M);
 % Do fft registration
 fprintf('Removing background and hot pixels...\n')
 
-% stack_dct = stack;
-% 
-% for n = 1:size(stack_dct,3)
-%     im = stack(:,:,n);
-%     bg_dct = dct2(remove_hot_pixels(im,3,.0001));
-%     bg_dct(1:20,1:20) = 0;
-% 
-%     stack_dct(:,:,n) = idct2(reshape(bg_dct,size(im)));
-% 
-%     
-% end
+
+stack_dct = stack;
+
+for n = 1:size(stack_dct,3)
+    im = stack(:,:,n);
+    %bg_dct = dct2(remove_hot_pixels(im,3,.0001));
+    bg_dct = dct2(im);
+    bg_dct(1:20,1:20) = 0;
+
+    stack_dct(:,:,n) = idct2(reshape(bg_dct,size(im)));
+
+    
+end
 
 fprintf('done\n')
 
 fprintf('registering...\n')
-
+good_count = 0;
 for m = 1:M
     
     %[r,c] = ind2sub(2*[Ny, Nx],findpeak_id(fftcorr(remove_hot_pixels(stack(:,:,m),3,.0001),stack(:,:,icenter))));
-    [r,c] = ind2sub(2*[Ny, Nx],findpeak_id(fftcorr(stack(:,:,m),ref_im)));
-    si{m} = [-(r-pr),-(c-pc)];
-    yi_reg(:,:,m) = crop(Si(pad(stack(:,:,m)),si{m}));
-    yi_reg_out(:,:,m) = uint8(yi_reg(:,:,m)/max(max(yi_reg(:,:,m)))*255);
+    corr_im = fftcorr(stack_dct(:,:,m),ref_im);
+    
+    if max(corr_im(:)) < .01
+        fprintf('image %i has poor match. Skipping\n',m);
+    else
+        good_count = good_count + 1;
+        [r,c] = ind2sub(2*[Ny, Nx],findpeak_id(corr_im));
+        si{good_count} = [-(r-pr),-(c-pc)];
+        yi_reg(:,:,good_count) = crop(Si(pad(stack(:,:,m)),si{good_count}));
+        yi_reg_out(:,:,good_count) = uint8(yi_reg(:,:,good_count)/max(max(yi_reg(:,:,good_count)))*255);
+    end
     
 end
+
+yi_reg = yi_reg(:,:,1:good_count);
+yi_reg_out = yi_reg_out(:,:,1:good_count);
 fprintf('done registering\n')
 
 fprintf('creating matrix\n')
-ymat = zeros(Ny*Nx,M);
-for m = 1:M
+Mgood = size(yi_reg,3);
+ymat = zeros(Ny*Nx,Mgood);
+for m = 1:Mgood
     ymat(:,m) = vec(yi_reg(:,:,m));
     
 end
@@ -100,13 +114,13 @@ fprintf('svd took %.2f seconds \n',t_svd)
 comps = reshape(u,[Ny, Nx,rnk]);
 vt = v';
 
-weights = zeros(M,rnk);
-for m = 1:M
+weights = zeros(Mgood,rnk);
+for m = 1:Mgood
     for r = 1:rnk
         weights(m,r) = s(r,r)*vt(r,m);
     end
 end
-si_mat = reshape(cell2mat(si)',[2,M]);
+si_mat = reshape(cell2mat(si)',[2,Mgood]);
 xq = -Nx/2+1:Nx/2;
 yq = -Ny/2+1:Ny/2;
 [Xq, Yq] = meshgrid(xq,yq);
@@ -117,7 +131,7 @@ for r = 1:rnk
     interpolant_r = scatteredInterpolant(si_mat(2,:)', si_mat(1,:)', weights(:,r),'natural','nearest');
     weights_interp(:,:,r) = rot90(interpolant_r(Xq,Yq),2);
 end
-fprintf('done')
+fprintf('done\n\n')
 
 shifts = si;
 

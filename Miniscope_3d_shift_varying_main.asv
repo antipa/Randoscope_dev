@@ -7,14 +7,22 @@
 %psf_path = 'D:\Kyrollos\RandoscopeNanoscribe\RandoscopeNanoscribe\Miniscope3D\psf_svd_12comps_23z_240xy_20190619';
 %psf_path = 'D:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1';
 
-psf_path = 'T:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1_green_channel';
-comps_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_components_green.mat'];
-weights_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_weights_interp_green.mat'];
+psf_path = 'T:\Antipa\Randoscopev2_PSFs\20190912_recalibration\SVD_2p5_um_PSF_5um_1_green_channel';
+%comps_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_components_green.mat'];
+%weights_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_weights_interp_green.mat'];
+comps_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_components_green.mat'];
+weights_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_weights_interp_green.mat'];
+fprintf('loading components\n')
 
 h_in = load(comps_path);
+fprintf('done.\nLoading weights\n')
 weights_in = load(weights_path);
+fprintf('done loading PSF data\n')
+
 
 %%
+
+%Get names of files/paths
 
 [meas_name,data_path,~] = uigetfile('*.*','Select measurement','T:\Randoscope\RandoscopeV2_data');
 [bg_name, bg_path,~] = uigetfile('*.*',['Select background for ',meas_name],fullfile([data_path,'../']));
@@ -22,18 +30,18 @@ weights_in = load(weights_path);
 meas_path = [data_path,meas_name];
 bg_path = [bg_path,bg_name];
 
-%%
 
+%%
 %Waterbear_20190905\waterbear_big_lastone_20_3_30ms';
 %bg_path = 'D:\Randoscope\RandoscopeV2_data\Waterbear_20190905\waterbear_big_lastone_bck_20_3_30ms_1';
  %= 'waterbear_big_lastone_3_MMStack_Default.ome.tif';
 %bg_name = 'waterbear_big_lastone_bck_20_3_30ms_1_MMStack_Default.ome.tif';
 
 
-%%
+
     
 
-for zd = 9
+%for zd = 9
     
     %data_path = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\real_res_target_10um_1';   %<--folder where the measurements are
     %bg_path = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data_8_21_2019\bck_real_res_target_10um_1';
@@ -49,8 +57,8 @@ for zd = 9
     params.ds = 4;  % Global downsampling ratio (i.e.final image-to-sensor ratio)
     params.ds_psf = 2;   %PSf downsample ratio (how much to further downsample -- if preprocessing included downsampling, use 1)
     params.ds_meas = 4;   % How much to further downsample measurement?
-    params.z_range = 1:18; %Range of z slices to be solved for. If this is a scalar, 2D
-    params.rank = 18;
+    params.z_range = 10:70; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
+    params.rank = 10;
     useGpu = 1; %cannot fit ds=2 on gpu unless we limit z range!!!!
     params.psf_norm = 'fro';   %Use max, slice, fro, or none
     
@@ -62,12 +70,14 @@ for zd = 9
     
     
     % Make sure h and weights are in order y,x,z,rank
+    fprintf('permuting PSF data\n')
     h_permute = permute(h_in.comps_out,[1,2,4,3]);
     weights_permute = permute(weights_in.weights_out,[1,2,4,3]);
+    fprintf('Done permuting. Resampling PSF\n');
     
     h = single(imresize(squeeze(h_permute(:,:,params.z_range,1:params.rank)),1/params.ds_psf,'box'));
     weights = single(imresize(squeeze(weights_permute(:,:,params.z_range,1:params.rank)),1/params.ds_psf,'box'));
-    
+    fprintf('Done. PSF ready!\n')
     clear h_permute;
     clear weights_permute;
     
@@ -97,8 +107,11 @@ for zd = 9
     
     % Read in data
     bg_raw = read_tiff_stack(bg_path,params.ds_meas);
-    for tiff_slice = 101:150
+    %%
+    im_tag = 'new_psf';
+    for tiff_slice = 1
         params.tiff_slice = tiff_slice;   %Slices to load from tiff stack. If 'all' used, it will average.
+        %params.tiff_slice = 'all';
         switch lower(params.data_tiff_format)
             case('z')
                 data_raw = double(read_tiff_stack(meas_path,params.ds_meas,params.meas_depth));
@@ -142,9 +155,14 @@ for zd = 9
         
         %define crop and pad operators to handle 2D fft convolution
         pad2d = @(x)padarray(x,[size(h,1)/2,size(h,2)/2],0,'both');
-        cc = gpuArray(size(h,2)/2+1):(3*size(h,2)/2);
-        rc = gpuArray(size(h,1)/2+1):(3*size(h,1)/2);
-        crop2d = @(x)x(rc,cc);
+        ccL = size(h,2)/2+1;
+        ccU = 3*size(h,2)/2;
+        rcL = size(h,1)/2+1;
+        rcU = 3*size(h,1)/2;
+        
+        %cc = gpuArray((size(h,2)/2+1):(3*size(h,2)/2));
+        %rc = gpuArray((size(h,1)/2+1):(3*size(h,1)/2));
+        crop2d = @(x)x(rcL:rcU,ccL:ccU);
         
         
         
@@ -183,13 +201,13 @@ for zd = 9
         options.residTol = 5e-5;
         options.momentum = 'nesterov';
         options.disp_figs = 1;
-        options.disp_fig_interval = 100;   %display image this often
+        options.disp_fig_interval = 10;   %display image this often
         if Nz == 1
             options.xsize = [Ny, Nx];
         else
             options.xsize=[Ny, Nx, Nz];
         end
-        options.print_interval = 20;
+        options.print_interval = 5;
         
         figure(2)
         clf
@@ -206,47 +224,78 @@ for zd = 9
         
         
 
-        
+        large = 1;
         if Nz > 1
-            A = @(x)A_svd_3d(x, weights,H);
-            
-            Aadj = @(y)A_adj_svd_3d(y, weights, Hconj);
+            if large == 0
+                A = @(x)A_svd_3d(x, weights,H);
+
+                Aadj = @(y)A_adj_svd_3d(y, weights, Hconj);
+            else
+                weights=gpuArray(weights);
+                H = gpuArray(H);
+                Hconj = gpuArray(Hconj);
+                b = gpuArray(single(b));
+                A = @(x)A_svd_3d_large(x,weights,H);
+                Aadj = @(y)A_adj_svd_3d_large(y, weights, Hconj);
+            end
         elseif Nz == 1
             A = @(x)A_svd(H, weights, x, nocrop);
             Aadj = @(y)A_adj_svd(Hconj,weights,y,nocrop);
         end
         
-        if useGpu
-            grad_handle = @(x)linear_gradient_b(x, A, Aadj, gpuArray(single(b)));
-        else
-            grad_handle = @(x)linear_gradient_b(x, A, Aadj, b(:,:,cindex));
-        end
-        
-        %Prox
-        %prox_handle = @(x)deal(x.*(x>=0), abs(sum(sum(sum(x(x<0))))));
-        
-        params.tau1 = gpuArray(.4e-7);   %.000005 works pretty well for v1 camera, .0002 for v2
-        tau_iso = gpuArray(.25e-4);
+        params.tau1 = .5e-7;   %.000005 works pretty well for v1 camera, .0002 for v2
+        tau_iso = (.25e-4);
         params.z_tv_weight = 20;    %z weighting in anisotropic TV
         tau2 = .001;
         TVnorm3d = @(x)sum(sum(sum(abs(x))));
-        %prox_handle = @(x)deal(1/3*(x.*(x>=0) + soft(x, tau2) + tv3dApproxHaar(x, params.tau1)), TVnorm3d(x));
         
         
-        %options.stepsize = .1e-3; for ds=4
+               %options.stepsize = .1e-3; for ds=4
         if params.ds == 4
             if strcmpi(params.psf_norm ,'fro')
                 options.stepsize = 3e-3;
             else
                 options.stepsize = 3e-6;
             end
+            if Nz>20
+                options.stepsize = .0023;
+            end
         elseif params.ds == 2
             options.stepsize = 1e-4;
         end
         
         
+        if useGpu
+      
+            grad_handle = @(x)linear_gradient_b(x, A, Aadj, gpuArray(single(b)));
+   
+            params.tau1 = gpuArray(params.tau1);
+            tau_iso = gpuArray(tau_iso);
+            params.z_tv_weight = gpuArray(params.z_tv_weight);
+            options.stepsize = gpuArray(options.stepsize);
+            
+        else
+            if ~large
+                grad_handle = @(x)linear_gradient_b(x, A, Aadj, single(b));
+            else
+                grad_handle = @(x)linear_gradient_large(x,A,Aadj,gpuArray(single(b)));
+            end
+            
+        end
+        
+        %Prox
+        %prox_handle = @(x)deal(x.*(x>=0), abs(sum(sum(sum(x(x<0))))));
+        
+        
+       
+        %prox_handle = @(x)deal(1/3*(x.*(x>=0) + soft(x, tau2) + tv3dApproxHaar(x, params.tau1)), TVnorm3d(x));
+        
+        
+ 
+        
+        
         if Nz>1
-            prox_handle = @(x)deal(1/2*(max(x,0) + tv3d_iso_Haar(x, params.tau1, params.z_tv_weight)), params.tau1*TVnorm3d(x));
+            prox_handle = @(x)deal(1/2*(max(x,0) + (tv3d_iso_Haar((x), params.tau1, params.z_tv_weight))), params.tau1*TVnorm3d(x));
         elseif Nz == 1
             prox_handle = @(x)deal(.5*tv2d_aniso_haar(x,params.tau1*options.stepsize) + ...
                 .5*max(x,0), params.tau1*options.stepsize*TVnorm(x));
@@ -269,6 +318,9 @@ for zd = 9
             xinit = gpuArray(single(xinit));
             [xhat, f2] = proxMin(grad_handle,prox_handle,xinit,gpuArray(single(b)),options);
         else
+            if large
+                xinit = gpuArray(xinit);
+            end
             [xhat, f2] = proxMin(grad_handle,prox_handle,xinit,b,options);
         end
         
@@ -319,9 +371,9 @@ for zd = 9
             gpuDevice(1)
         end
     end
-end
+%end
 
 %%
-imagesc(xhat(:,:,1)), colormap gray, axis image, caxis([0 .5])
+imagesc(xhat_out(:,:,-5)), colormap gray, axis image, caxis([0 0.1])
 % imagesc(brain_recon.xhat(:,:,10))
 % axis image

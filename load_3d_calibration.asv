@@ -59,8 +59,7 @@ bck_files_sorted = bck_files(bck_sort);
 
 for n = 1:length(bck_files)
     n
-    bck_files_sorted(n).bck = mean(read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2,1:3),4);
-    bck_files_sorted(n).bck2 = read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2,4);
+    bck_files_sorted(n).bck = mean(read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2),4);
 end
 
 
@@ -115,21 +114,17 @@ for zcount = 1:length(psf_files_z)
     icenter = 36;   %Location of reference image in each xy layer
     colors = 2;   %Use color index (1 for r, 2 for g, 3 for b). String 'all' will average.
     if strcmpi(colors,'all')
-        stack_mono = squeeze(mean(double(psfs.xystack) - bck_files_sorted(zcount).bck,3));   %2 because there are 2 bck files per z plane
-        ref_im = mean(psfs.xystack(:,:,:,icenter) - bck_files_sorted(zcount).bck2,3);
+        stack_mono = squeeze(mean(double(psfs.xystack) - bck_files_sorted(2*zcount).bck,3));   %2 because there are 2 bck files per z plane
+        ref_im = mean(psfs.xystack(:,:,:,icenter) - bck_files_sorted(2*zcount-1).bck,3);
     else
        
-        stack_mono = squeeze(double(psfs.xystack(:,:,colors,:)) - bck_files_sorted(zcount).bck(:,:,colors));
-        ref_im = psfs.xystack(:,:,colors,icenter) - bck_files_sorted(zcount).bck2(:,:,colors);
+        stack_mono = squeeze(double(psfs.xystack(:,:,colors,:)) - bck_files_sorted(2*zcount).bck(:,:,colors));
+        ref_im = psfs.xystack(:,:,colors,icenter) - bck_files_sorted(2*zcount-1).bck(:,:,colors);
     end
 
    
     
     [comps, weights_interp, weights,shifts,yi_reg_out] = Miniscope_svd_xy(stack_mono,ref_im,rnk,'boundary_condition','circular');
-    if sum(sum(weights_interp(:,:,1)))<0
-        comps(:,:,1) = -comps(:,:,1);
-        weights_interp(:,:,1) = -weights_interp(:,:,1);
-    end
     if zcount == 1
         comps_out(:,:,:,1) = comps;
         weights_out(:,:,:,1) = weights_interp;
@@ -185,19 +180,17 @@ end
 %     end
 % end
 %%
-for z = 1:80
-    imagesc(comps_out(:,:,1,z))
+imagesc(yi_reg_out(:,:,26))
 
-    axis image
-    drawnow
-end
+axis image
+drawnow
 
 % for n = 1:length(bck_files)
 %     n
 %     bck_files_sorted(n).bck = mean(double(read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2)),4);
 % end
 %%
-h =sum(weights_interp(48,6,:).*comps,3);
+h =sum(weights_interp(489,660,:).*comps,3);
 imagesc(h)
 axis image
 %%
