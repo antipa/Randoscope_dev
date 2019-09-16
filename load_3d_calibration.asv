@@ -1,6 +1,6 @@
 % Loads in calibration data and removes background
 
-data_dir = 'Q:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data20190912\2_5umPSF_1'
+data_dir = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data20190912\2_5umPSF_1'
 
 file_type = '.ome'
 
@@ -59,7 +59,8 @@ bck_files_sorted = bck_files(bck_sort);
 
 for n = 1:length(bck_files)
     n
-    bck_files_sorted(n).bck = mean(read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2),4);
+    bck_files_sorted(n).bck = mean(read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2,1:3),4);
+    bck_files_sorted(n).bck2 = read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2,4);
 end
 
 
@@ -100,31 +101,35 @@ end
 
 %%
 
-for zcount = 1:length(psf_files_z)
+for zcount = 30
     psfs.xystack = zeros(Ny,Nx,Nc,Nxy);
     for xycount = 1:length(psf_files_z(zcount).XYnames)
         psf_in = squeeze(mean(read_tiff_stack([data_dir,'\',psf_files_z(zcount).XYnames{xycount}],ds),4));
         psfs.xystack(:,:,:,xycount) = psf_in;
         fprintf('Z: %i \t XY %i\n',zcount,xycount)
         fprintf(['image ',psf_files_z(zcount).XYnames{xycount},'\n'])
-        imagesc(psfs.xystack(:,:,:,xycount)/100), axis image
+        imagesc(psfs.xystack(:,:,:,xycount)/50), axis image
         title(sprintf('Z %i, xyindex %i',zcount,xycount))
         drawnow
     end
     icenter = 36;   %Location of reference image in each xy layer
     colors = 2;   %Use color index (1 for r, 2 for g, 3 for b). String 'all' will average.
     if strcmpi(colors,'all')
-        stack_mono = squeeze(mean(double(psfs.xystack) - bck_files_sorted(2*zcount).bck,3));   %2 because there are 2 bck files per z plane
-        ref_im = mean(psfs.xystack(:,:,:,icenter) - bck_files_sorted(2*zcount-1).bck,3);
+        stack_mono = squeeze(mean(double(psfs.xystack) - bck_files_sorted(zcount).bck,3));   %2 because there are 2 bck files per z plane
+        ref_im = mean(psfs.xystack(:,:,:,icenter) - bck_files_sorted(zcount).bck2,3);
     else
        
-        stack_mono = squeeze(double(psfs.xystack(:,:,colors,:)) - bck_files_sorted(2*zcount).bck(:,:,colors));
-        ref_im = psfs.xystack(:,:,colors,icenter) - bck_files_sorted(2*zcount-1).bck(:,:,colors);
+        stack_mono = squeeze(double(psfs.xystack(:,:,colors,:)) - bck_files_sorted(zcount).bck(:,:,colors));
+        ref_im = psfs.xystack(:,:,colors,icenter) - bck_files_sorted(zcount).bck2(:,:,colors);
     end
 
    
     
     [comps, weights_interp, weights,shifts,yi_reg_out] = Miniscope_svd_xy(stack_mono,ref_im,rnk,'boundary_condition','circular');
+    if sum(sum(weights_interp(:,:,1)))<0
+        comps(:,:,1) = -comps(:,:,1);
+        weights_interp(:,:,1) = -weights_interp(:,:,1);
+    end
     if zcount == 1
         comps_out(:,:,:,1) = comps;
         weights_out(:,:,:,1) = weights_interp;
@@ -180,17 +185,19 @@ end
 %     end
 % end
 %%
-imagesc(yi_reg_out(:,:,26))
-
-axis image
-drawnow
+for z = 1:63
+    plot(sum(yi_reg_out(:,:,z)))
+    ylim([-10 .1])
+    
+    drawnow
+end
 
 % for n = 1:length(bck_files)
 %     n
 %     bck_files_sorted(n).bck = mean(double(read_tiff_stack([data_dir,'\',bck_files_sorted(n).name],2)),4);
 % end
 %%
-h =sum(weights_interp(489,660,:).*comps,3);
+h =sum(weights_interp(48,6,:).*comps,3);
 imagesc(h)
 axis image
 %%

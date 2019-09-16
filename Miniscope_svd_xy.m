@@ -47,10 +47,11 @@ end
 
 % Normalize the stack first
 stack_norm = zeros(1,M);
+stack_dct = stack;
 for m = 1:M
-    stack_norm(m) = norm(stack(:,:,m),'fro');
-    stack(:,:,m) = stack(:,:,m)/stack_norm(m);
-    
+    stack_norm(m) = norm(stack_dct(:,:,m),'fro');
+    stack_dct(:,:,m) = stack_dct(:,:,m)/stack_norm(m);
+    stack(:,:,m) = stack(:,:,m)/norm(ref_im,'fro');
 end
 ref_im = ref_im/norm(ref_im,'fro');
 si = cell(1,M);
@@ -58,10 +59,10 @@ si = cell(1,M);
 fprintf('Removing background and hot pixels...\n')
 
 
-stack_dct = stack;
+
 
 for n = 1:size(stack_dct,3)
-    im = stack(:,:,n);
+    im = stack_dct(:,:,n);
     %bg_dct = dct2(remove_hot_pixels(im,3,.0001));
     bg_dct = dct2(im);
     bg_dct(1:20,1:20) = 0;
@@ -135,7 +136,7 @@ fprintf('done\n\n')
 
 shifts = si;
 
-
+yi_reg_out = yi_reg;
 return
 
 

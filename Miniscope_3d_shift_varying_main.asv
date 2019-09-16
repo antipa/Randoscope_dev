@@ -7,7 +7,7 @@
 %psf_path = 'D:\Kyrollos\RandoscopeNanoscribe\RandoscopeNanoscribe\Miniscope3D\psf_svd_12comps_23z_240xy_20190619';
 %psf_path = 'D:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1';
 
-psf_path = 'T:\Antipa\Randoscopev2_PSFs\20190912_recalibration\SVD_2p5_um_PSF_5um_1_green_channel';
+psf_path = 'D:\Antipa\Randoscopev2_PSFs\20190912_recalibration\SVD_2p5_um_PSF_5um_1_green_channel';
 %comps_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_components_green.mat'];
 %weights_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_weights_interp_green.mat'];
 comps_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_components_green.mat'];
@@ -24,7 +24,7 @@ fprintf('done loading PSF data\n')
 
 %Get names of files/paths
 
-[meas_name,data_path,~] = uigetfile('*.*','Select measurement','T:\Randoscope\RandoscopeV2_data');
+[meas_name,data_path,~] = uigetfile('*.*','Select measurement','D:\Randoscope\RandoscopeV2_data');
 [bg_name, bg_path,~] = uigetfile('*.*',['Select background for ',meas_name],fullfile([data_path,'../']));
 
 meas_path = [data_path,meas_name];
@@ -49,7 +49,7 @@ bg_path = [bg_path,bg_name];
     
     params.data_tiff_format = 'time';   %Use 'time' if tiff stacks are at the same location over time, use 'z' if they are z stacks'
     params.tiff_color = 2;    %use 'rgb' or 'mono'. Use number (1,2,3) for r,g, or b only
-    params.meas_depth = zd;    %If using 3D tiff or list of files, which slice was processed?
+    params.meas_depth = 82;    %If using 3D tiff or list of files, which slice was processed?
     
     params.ds_z = 1;   %z downsampling ratio
     params.meas_bias = 0;
@@ -57,7 +57,7 @@ bg_path = [bg_path,bg_name];
     params.ds = 4;  % Global downsampling ratio (i.e.final image-to-sensor ratio)
     params.ds_psf = 2;   %PSf downsample ratio (how much to further downsample -- if preprocessing included downsampling, use 1)
     params.ds_meas = 4;   % How much to further downsample measurement?
-    params.z_range = 10:70; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
+    params.z_range = 15:68; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
     params.rank = 10;
     useGpu = 1; %cannot fit ds=2 on gpu unless we limit z range!!!!
     params.psf_norm = 'fro';   %Use max, slice, fro, or none
@@ -71,16 +71,19 @@ bg_path = [bg_path,bg_name];
     
     % Make sure h and weights are in order y,x,z,rank
     fprintf('permuting PSF data\n')
-    h_permute = permute(h_in.comps_out,[1,2,4,3]);
-    weights_permute = permute(weights_in.weights_out,[1,2,4,3]);
+    h = permute(h_in.comps_out(:,:,1:params.rank,params.z_range),[1,2,4,3]);
+    weights = permute(weights_in.weights_out(:,:,1:params.rank,params.z_range),[1,2,4,3]);
     fprintf('Done permuting. Resampling PSF\n');
     
-    h = single(imresize(squeeze(h_permute(:,:,params.z_range,1:params.rank)),1/params.ds_psf,'box'));
-    weights = single(imresize(squeeze(weights_permute(:,:,params.z_range,1:params.rank)),1/params.ds_psf,'box'));
+    clear h_in;
+    clear weights_in;
+    h = single(imresize(squeeze(h),1/params.ds_psf,'box'));
+    weights = single(imresize(squeeze(weights),1/params.ds_psf,'box'));
     fprintf('Done. PSF ready!\n')
-    clear h_permute;
-    clear weights_permute;
-    
+    %clear h_permute;
+    %clear weights_permute;
+
+    %%
     switch lower(params.psf_norm)
         case('max')
             h = h/max(h(:));
@@ -107,9 +110,9 @@ bg_path = [bg_path,bg_name];
     
     % Read in data
     bg_raw = read_tiff_stack(bg_path,params.ds_meas);
-    %%
+  
     im_tag = 'new_psf';
-    for tiff_slice = 1
+    for tiff_slice = 1:150
         params.tiff_slice = tiff_slice;   %Slices to load from tiff stack. If 'all' used, it will average.
         %params.tiff_slice = 'all';
         switch lower(params.data_tiff_format)
@@ -201,13 +204,13 @@ bg_path = [bg_path,bg_name];
         options.residTol = 5e-5;
         options.momentum = 'nesterov';
         options.disp_figs = 1;
-        options.disp_fig_interval = 10;   %display image this often
+        options.disp_fig_interval = 20;   %display image this often
         if Nz == 1
             options.xsize = [Ny, Nx];
         else
             options.xsize=[Ny, Nx, Nz];
         end
-        options.print_interval = 5;
+        options.print_interval = 10;
         
         figure(2)
         clf
@@ -224,7 +227,7 @@ bg_path = [bg_path,bg_name];
         
         
 
-        large = 1;
+        large = 0;
         if Nz > 1
             if large == 0
                 A = @(x)A_svd_3d(x, weights,H);
@@ -243,9 +246,9 @@ bg_path = [bg_path,bg_name];
             Aadj = @(y)A_adj_svd(Hconj,weights,y,nocrop);
         end
         
-        params.tau1 = .5e-7;   %.000005 works pretty well for v1 camera, .0002 for v2
+        params.tau1 = 0.8e-9; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
         tau_iso = (.25e-4);
-        params.z_tv_weight = 20;    %z weighting in anisotropic TV
+        params.z_tv_weight = 1;    %z weighting in anisotropic TV
         tau2 = .001;
         TVnorm3d = @(x)sum(sum(sum(abs(x))));
         
@@ -258,10 +261,10 @@ bg_path = [bg_path,bg_name];
                 options.stepsize = 3e-6;
             end
             if Nz>20
-                options.stepsize = .0023;
+                options.stepsize = .001;
             end
         elseif params.ds == 2
-            options.stepsize = 1e-4;
+            options.stepsize = 0.7e-3;
         end
         
         
@@ -333,7 +336,7 @@ bg_path = [bg_path,bg_name];
         datestamp = datetime;
         tiff_string = sprintf('%03d',tiff_slice);
         date_string = datestr(datestamp,'yyyy-mmm-dd_HHMMSS');
-        save_str = ['../recons/',date_string,'_',meas_name(1:end-4),'_',tiff_string];
+        save_str = ['../recons/',date_string,'_',meas_name(1:end-4),'_',im_tag,'_',tiff_string];
         full_path = fullfile(data_path,save_str);
         mkdir(full_path);
         
@@ -348,7 +351,7 @@ bg_path = [bg_path,bg_name];
         f_out = gather(f2);
         out_names = {};
         for n= 1:size(imout,3)
-            out_names{n} = [filebase,'_',sprintf('%.3i',n),'_',tiff_string,'.png'];
+            out_names{n} = [filebase,'_',sprintf('%.3i',n),'_',im_tag,'_',tiff_string,'.png'];
             imwrite(imout(:,:,n),out_names{n});
             fprintf('writing image %i of %i\n',n,size(xhat,3))
         end
@@ -360,7 +363,7 @@ bg_path = [bg_path,bg_name];
         fprintf('writing .mat\n')
         options.fighandle = []
         
-        save([full_path,'/',meas_name(1:end-4),'_',date_string,'_',tiff_string,'.mat'], 'tau_iso','TVpars','xhat_out', 'options', 'comps_path','weights_path', 'b','params')
+        save([full_path,'/',meas_name(1:end-4),'_',date_string,'_',im_tag,'_',tiff_string,'.mat'], 'tau_iso','TVpars','xhat_out', 'options', 'comps_path','weights_path', 'b','params')
         fprintf('done writing .mat\n')
         % gpuDevice(1)
         clear xhat
