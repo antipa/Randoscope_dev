@@ -7,11 +7,12 @@
 %psf_path = 'D:\Kyrollos\RandoscopeNanoscribe\RandoscopeNanoscribe\Miniscope3D\psf_svd_12comps_23z_240xy_20190619';
 %psf_path = 'D:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1';
 
-psf_path = 'D:\Antipa\Randoscopev2_PSFs\20190912_recalibration\SVD_2p5_um_PSF_5um_1_green_channel';
+%psf_path = 'T:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1_green_channel';
+psf_path = 'T:\Antipa\Randoscopev2_PSFs\20190912_recalibration\SVD_2p5_um_PSF_5um_1_green_channel';
 %comps_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_components_green.mat'];
 %weights_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_weights_interp_green.mat'];
-comps_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_components_green.mat'];
-weights_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_weights_interp_green.mat'];
+comps_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_components_green_NoFro.mat'];
+weights_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_weights_interp_green_NoFro.mat'];
 fprintf('loading components\n')
 
 h_in = load(comps_path);
@@ -24,13 +25,43 @@ fprintf('done loading PSF data\n')
 
 %Get names of files/paths
 
-[meas_name,data_path,~] = uigetfile('*.*','Select measurement','D:\Randoscope\RandoscopeV2_data');
+[meas_name,data_path,~] = uigetfile('*.*','Select measurement','T:\Randoscope\RandoscopeV2_data');
 [bg_name, bg_path,~] = uigetfile('*.*',['Select background for ',meas_name],fullfile([data_path,'../']));
 
+ome = strfind(meas_name,'.ome');
+bg_ome = strfind(bg_name,'.ome');
+meta_name = [meas_name(1:ome-1),'_metadata.txt'];
+bg_meta_name = [bg_name(1:bg_ome-1),'_metadata.txt'];
+
+% Inline function to open a metadata file, convert to characters then
+% decode (it's in json format).
+parse_json = @(x)jsondecode(transpose(fread(fopen(x),'*char')));
+
+
+% Construct full system paths to images
 meas_path = [data_path,meas_name];
+meta_path = [data_path,meta_name];
+bg_meta_path = [bg_path,bg_meta_name];
 bg_path = [bg_path,bg_name];
 
+% Get json data from measurement and background images
+file_info = parse_json(meta_path);
+bg_info = parse_json(bg_meta_path);
 
+params.data_format = file_info.FrameKey_0_0_0.x50890959_DataFormat;
+params.bg_format = bg_info.FrameKey_0_0_0.x50890959_DataFormat;
+params.ds_raw = file_info.FrameKey_0_0_0.Binning;
+params.ds_bg = bg_info.FrameKey_0_0_0.Binning;
+
+
+params.demosaic = contains(lower(params.data_format),'raw');
+params.demosaic_bg = contains(lower(params.bg_format),'raw');
+params.bg_name = bg_name;
+params.meas_path = meas_path;
+params.meta_path = meta_path;
+params.bg_path = bg_path;
+params.meas_info = file_info;
+params.bg_info = bg_info;
 %%
 %Waterbear_20190905\waterbear_big_lastone_20_3_30ms';
 %bg_path = 'D:\Randoscope\RandoscopeV2_data\Waterbear_20190905\waterbear_big_lastone_bck_20_3_30ms_1';
@@ -56,9 +87,9 @@ bg_path = [bg_path,bg_name];
     init_style = 'zeros';   %Use 'loaded' to load initialization, 'zeros' to start from scratch. Admm will run 2D deconv, then replicate result to all time points
     params.ds = 4;  % Global downsampling ratio (i.e.final image-to-sensor ratio)
     params.ds_psf = 2;   %PSf downsample ratio (how much to further downsample -- if preprocessing included downsampling, use 1)
-    params.ds_meas = 4;   % How much to further downsample measurement?
-    params.z_range = 15:68; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
-    params.rank = 10;
+    params.ds_meas = params.ds/params.ds_raw;   % How much to further downsample measurement?
+    params.z_range = 1:72; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
+    params.rank = 18;
     useGpu = 1; %cannot fit ds=2 on gpu unless we limit z range!!!!
     params.psf_norm = 'fro';   %Use max, slice, fro, or none
     
@@ -75,8 +106,8 @@ bg_path = [bg_path,bg_name];
     weights = permute(weights_in.weights_out(:,:,1:params.rank,params.z_range),[1,2,4,3]);
     fprintf('Done permuting. Resampling PSF\n');
     
-    clear h_in;
-    clear weights_in;
+    %clear h_in;
+    %clear weights_in;
     h = single(imresize(squeeze(h),1/params.ds_psf,'box'));
     weights = single(imresize(squeeze(weights),1/params.ds_psf,'box'));
     fprintf('Done. PSF ready!\n')
@@ -109,10 +140,10 @@ bg_path = [bg_path,bg_name];
     
     
     % Read in data
-    bg_raw = read_tiff_stack(bg_path,params.ds_meas);
-  
-    im_tag = 'new_psf';
-    for tiff_slice = 1:150
+    
+
+    im_tag = 'RawTest';
+    for tiff_slice = 1
         params.tiff_slice = tiff_slice;   %Slices to load from tiff stack. If 'all' used, it will average.
         %params.tiff_slice = 'all';
         switch lower(params.data_tiff_format)
@@ -120,22 +151,36 @@ bg_path = [bg_path,bg_name];
                 data_raw = double(read_tiff_stack(meas_path,params.ds_meas,params.meas_depth));
                 bg_in =  double(read_tiff_stack(bg_path,params.ds_meas,params.meas_depth));
             case('time')
+                bg_raw = read_tiff_stack(bg_path,1);
                 if strcmpi(params.tiff_slice,'all')
                     data_raw = mean(double(read_tiff_stack(meas_path,params.ds)),4);   %Average out the time variable
+                    
                 else
-                    data_raw = double(read_tiff_stack(meas_path,params.ds,params.tiff_slice));
-                    data_raw = mean(data_raw,4);
+                    data_in = read_tiff_stack(meas_path,params.ds_meas,params.tiff_slice);
+                    
+                    
+                    if params.demosaic
+                        data_demos = double(demosaic(uint16(data_in),'grbg'));
+                        
+                    else
+                        data_demos = mean(data_in,4);
+                    end
                 end
-                bg_in = mean(double(bg_raw),4);
+                if params.demosaic_bg
+                    bg_in = imresize(double(demosaic(uint16(mean(bg_raw,3)),'grbg')),params.ds_bg/params.ds);
+                else
+                    bg_in = mean(double(bg_raw),4);
+                end
+                
                 % data_raw = data_raw(:,:,:,1);
                 
         end
         
         if strcmpi(params.tiff_color,'rgb')
-            data = mean(data_raw,3);
+            data = mean(data_demos,3);
             bg = mean(bg_in,3);   %Average out color. Change to (:,:,color) to select one channel
         elseif isnumeric(params.tiff_color)
-            data = data_raw(:,:,params.tiff_color);
+            data = data_demos(:,:,params.tiff_color);
             bg = bg_in(:,:,params.tiff_color);
         end
         data = data - bg - params.meas_bias;
@@ -246,11 +291,7 @@ bg_path = [bg_path,bg_name];
             Aadj = @(y)A_adj_svd(Hconj,weights,y,nocrop);
         end
         
-        params.tau1 = 0.8e-9; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
-        tau_iso = (.25e-4);
-        params.z_tv_weight = 1;    %z weighting in anisotropic TV
-        tau2 = .001;
-        TVnorm3d = @(x)sum(sum(sum(abs(x))));
+        
         
         
                %options.stepsize = .1e-3; for ds=4
@@ -261,11 +302,17 @@ bg_path = [bg_path,bg_name];
                 options.stepsize = 3e-6;
             end
             if Nz>20
-                options.stepsize = .001;
+                options.stepsize = .004;
             end
         elseif params.ds == 2
             options.stepsize = 0.7e-3;
         end
+        
+        params.tau1 = options.stepsize*e-4; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
+        tau_iso = (.25e-4);
+        params.z_tv_weight = 1;    %z weighting in anisotropic TV
+        tau2 = .001;
+        TVnorm3d = @(x)sum(sum(sum(abs(x))));
         
         
         if useGpu

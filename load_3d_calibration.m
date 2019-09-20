@@ -1,6 +1,6 @@
 % Loads in calibration data and removes background
 
-data_dir = 'Z:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data20190912\2_5umPSF_1'
+data_dir = 'Q:\kyrollos\RandoscopeNanoscribe\Nanoscribe_pdms\Data20190912\2_5umPSF_1'
 
 file_type = '.ome'
 
@@ -101,7 +101,7 @@ end
 
 %%
 
-for zcount = 1:length(psf_files_z)
+for zcount = 30
     psfs.xystack = zeros(Ny,Nx,Nc,Nxy);
     for xycount = 1:length(psf_files_z(zcount).XYnames)
         psf_in = squeeze(mean(read_tiff_stack([data_dir,'\',psf_files_z(zcount).XYnames{xycount}],ds),4));
@@ -185,8 +185,8 @@ end
 %     end
 % end
 %%
-for z = 10
-    imagesc(weights_interp(:,:,z));
+for z = 1:80
+    imagesc(weights_out(:,:,10,z));
     axis image
     
     drawnow
