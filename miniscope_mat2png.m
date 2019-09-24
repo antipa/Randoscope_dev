@@ -1,5 +1,6 @@
-folder = '/Users/nick.antipa/Documents/Diffusers/Miniscope/RandoscopeV2/Recons/waterbears/new_PSFs/waterbear_closer_3_newPSF_MAT_1-68';
-
+folder = uigetdir('.','Pick folder containing mat files');
+%%
+out_folder = uigetdir(folder,'Pick output folder');
 
 files = dir(folder);
 good_count = 0;
@@ -17,7 +18,7 @@ end
 
 files_good = files(logical(good_file));
 
-%%
+
 
 [~,sort_ids] = sort(t_ind,'ascend');
 
@@ -35,13 +36,13 @@ for n = 1:Nt
     full_array(:,:,:,n) = file_in.xhat_out;
 end
 
-%%
+
 full_norm = max(max(max(max(full_array))));
 
-%%
+
 array_normed = min(1.1*full_array/full_norm,1);
 
-out_folder = '/Users/nick.antipa/Documents/Diffusers/Miniscope/RandoscopeV2/Recons/waterbears/new_PSFs/waterbear_closer_3_newPSF_normalized_PNG';
+
 for t = 1:Nt
     for z = 1:Nz
         imwrite(squeeze(array_normed(:,:,z,t)),[out_folder,sprintf('/waterbear_closer_3_T_%03d_Z_%03d.png',t,z)]);
