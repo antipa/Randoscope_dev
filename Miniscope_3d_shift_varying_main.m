@@ -88,7 +88,7 @@ params.bg_info = bg_info;
     params.ds = 4;  % Global downsampling ratio (i.e.final image-to-sensor ratio)
     params.ds_psf = 2;   %PSf downsample ratio (how much to further downsample -- if preprocessing included downsampling, use 1)
     params.ds_meas = params.ds/params.ds_raw;   % How much to further downsample measurement?
-    params.z_range = 1:18; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
+    params.z_range = 1:20; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
     params.rank = 18;
     useGpu = 1; %cannot fit ds=2 on gpu unless we limit z range!!!!
     params.psf_norm = 'fro';   %Use max, slice, fro, or none
@@ -142,8 +142,8 @@ params.bg_info = bg_info;
     % Read in data
     
 
-    im_tag = 'RawTest';
-    for tiff_slice = 1:25
+    im_tag = '27849';
+    for tiff_slice = 67:2:100
         params.tiff_slice = tiff_slice;   %Slices to load from tiff stack. If 'all' used, it will average.
         %params.tiff_slice = 'all';
         switch lower(params.data_tiff_format)
@@ -154,20 +154,22 @@ params.bg_info = bg_info;
                 bg_raw = read_tiff_stack(bg_path,1);
                 if strcmpi(params.tiff_slice,'all')
                     data_raw = mean(double(read_tiff_stack(meas_path,params.ds)),4);   %Average out the time variable
-                    
+                    if params.demosaic
+                        data_demos = imresize(double(demosaic(uint16(data_in),'grbg')),params.ds_raw/params.ds,'box');
+                    end
                 else
-                    data_in = read_tiff_stack(meas_path,params.ds_meas,params.tiff_slice);
+                    data_in = read_tiff_stack(meas_path,1,params.tiff_slice);
                     
                     
                     if params.demosaic
-                        data_demos = double(demosaic(uint16(data_in),'rggb'));
+                        data_demos = imresize(double(demosaic(uint16(data_in),'grbg')),params.ds_raw/params.ds,'box');
                         %grbg
                     else
                         data_demos = mean(data_in,4);
                     end
                 end
                 if params.demosaic_bg
-                    bg_in = imresize(double(demosaic(uint16(mean(bg_raw,3)),'rggb')),params.ds_bg/params.ds);
+                    bg_in = imresize(double(demosaic(uint16(mean(bg_raw,3)),'grbg')),params.ds_bg/params.ds);
                 else
                     bg_in = mean(double(bg_raw),4);
                 end
@@ -249,7 +251,7 @@ params.bg_info = bg_info;
         options.residTol = 5e-5;
         options.momentum = 'nesterov';
         options.disp_figs = 1;
-        options.disp_fig_interval = 20;   %display image this often
+        options.disp_fig_interval = 100;   %display image this often
         if Nz == 1
             options.xsize = [Ny, Nx];
         else
@@ -297,7 +299,22 @@ params.bg_info = bg_info;
                %options.stepsize = .1e-3; for ds=4
         if params.ds == 4
             if strcmpi(params.psf_norm ,'fro')
-                options.stepsize = 3e-3;
+                if Nz == 18
+                    options.stepsize = 3e-3;
+                elseif Nz == 12
+                    options.stepsize = .4e-2;
+                    fprintf('foo\n')
+                elseif Nz == 20
+                    if params.rank  == 12
+                        options.stepsize = 3e-3;
+                    elseif params.rank == 8
+                        options.stepsize = 1e-3;
+                    elseif params.rank == 18
+                        options.stepsize = 4e-3;
+                    
+                       
+                    end
+                end
             else
                 options.stepsize = 3e-6;
             end
@@ -308,9 +325,9 @@ params.bg_info = bg_info;
             options.stepsize = 0.7e-3;
         end
         
-        params.tau1 = options.stepsize*1e-4; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
+        params.tau1 = options.stepsize*1.5e-4; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
         tau_iso = (.25e-4);
-        params.z_tv_weight = 1;    %z weighting in anisotropic TV
+        params.z_tv_weight = 3;    %z weighting in anisotropic TV
         tau2 = .001;
         TVnorm3d = @(x)sum(sum(sum(abs(x))));
         

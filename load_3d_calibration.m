@@ -9,7 +9,7 @@ m = 0;
 bck_files = struct('order',[],'name',[],'p',[]);
 bck_ind = 0;
 psf_ind = 0;
-psf_files = struct('name',[],'order',[])
+psf_files = struct('name',[],'order',[]);
 for n = 1:length(files)
     is_ftype = strfind(files(n).name,file_type);
     if ~isempty(is_ftype)
