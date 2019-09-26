@@ -88,8 +88,8 @@ params.bg_info = bg_info;
     params.ds = 4;  % Global downsampling ratio (i.e.final image-to-sensor ratio)
     params.ds_psf = 2;   %PSf downsample ratio (how much to further downsample -- if preprocessing included downsampling, use 1)
     params.ds_meas = params.ds/params.ds_raw;   % How much to further downsample measurement?
-    params.z_range = 1:20; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
-    params.rank = 18;
+    params.z_range = 11:54; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
+    params.rank = 14;
     useGpu = 1; %cannot fit ds=2 on gpu unless we limit z range!!!!
     params.psf_norm = 'fro';   %Use max, slice, fro, or none
     
@@ -110,6 +110,10 @@ params.bg_info = bg_info;
     %clear weights_in;
     h = single(imresize(squeeze(h),1/params.ds_psf,'box'));
     weights = single(imresize(squeeze(weights),1/params.ds_psf,'box'));
+    
+    % Normalize weights to have maximum sum through rank of 1
+    weights_norm = max(sum(weights(size(weights,1)/2,size(weights,2)/2,:,:),4),[],3);
+    weights = weights/weights_norm;
     fprintf('Done. PSF ready!\n')
     %clear h_permute;
     %clear weights_permute;
@@ -141,9 +145,9 @@ params.bg_info = bg_info;
     
     % Read in data
     
-
-    im_tag = '27849';
-    for tiff_slice = 67:2:100
+%%
+    im_tag = 'PsfAvgBgTest';
+    for tiff_slice = 1:100
         params.tiff_slice = tiff_slice;   %Slices to load from tiff stack. If 'all' used, it will average.
         %params.tiff_slice = 'all';
         switch lower(params.data_tiff_format)
@@ -153,9 +157,11 @@ params.bg_info = bg_info;
             case('time')
                 bg_raw = read_tiff_stack(bg_path,1);
                 if strcmpi(params.tiff_slice,'all')
-                    data_raw = mean(double(read_tiff_stack(meas_path,params.ds)),4);   %Average out the time variable
+                    data_raw = mean(double(read_tiff_stack(meas_path,1)),4);   %Average out the time variable
                     if params.demosaic
                         data_demos = imresize(double(demosaic(uint16(data_in),'grbg')),params.ds_raw/params.ds,'box');
+                    else
+                        data_demos = imresize(data_raw,params.ds_raw/params.ds,'box');
                     end
                 else
                     data_in = read_tiff_stack(meas_path,1,params.tiff_slice);
@@ -165,13 +171,13 @@ params.bg_info = bg_info;
                         data_demos = imresize(double(demosaic(uint16(data_in),'grbg')),params.ds_raw/params.ds,'box');
                         %grbg
                     else
-                        data_demos = mean(data_in,4);
+                        data_demos = imresize(mean(data_in,4),params.ds_raw/params.ds,'box');
                     end
                 end
                 if params.demosaic_bg
-                    bg_in = imresize(double(demosaic(uint16(mean(bg_raw,3)),'grbg')),params.ds_bg/params.ds);
+                    bg_in = imresize(double(demosaic(uint16(mean(bg_raw,3)),'grbg')),params.ds_bg/params.ds,'box');
                 else
-                    bg_in = mean(double(bg_raw),4);
+                    bg_in = imresize(mean(double(bg_raw),4),params.ds_bg/params.ds,'box');
                 end
                 
                 % data_raw = data_raw(:,:,:,1);
@@ -247,7 +253,7 @@ params.bg_info = bg_info;
         options.convTol = 15e-12;
         
         %options.xsize = [256,256];
-        options.maxIter = 5000;
+        options.maxIter = 4000;
         options.residTol = 5e-5;
         options.momentum = 'nesterov';
         options.disp_figs = 1;
@@ -257,7 +263,7 @@ params.bg_info = bg_info;
         else
             options.xsize=[Ny, Nx, Nz];
         end
-        options.print_interval = 10;
+        options.print_interval = 20;
         
         figure(2)
         clf
@@ -304,6 +310,8 @@ params.bg_info = bg_info;
                 elseif Nz == 12
                     options.stepsize = .4e-2;
                     fprintf('foo\n')
+                elseif Nz == 14
+                    options.stepsize = 4e-3;
                 elseif Nz == 20
                     if params.rank  == 12
                         options.stepsize = 3e-3;
@@ -314,20 +322,21 @@ params.bg_info = bg_info;
                     
                        
                     end
+                elseif Nz>20
+                    options.stepsize = .02;
                 end
+                
             else
                 options.stepsize = 3e-6;
             end
-            if Nz>20
-                options.stepsize = .004;
-            end
+            
         elseif params.ds == 2
             options.stepsize = 0.7e-3;
         end
         
-        params.tau1 = options.stepsize*1.5e-4; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
+        params.tau1 = options.stepsize*.06e-4; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
         tau_iso = (.25e-4);
-        params.z_tv_weight = 3;    %z weighting in anisotropic TV
+        params.z_tv_weight = 1;    %z weighting in anisotropic TV
         tau2 = .001;
         TVnorm3d = @(x)sum(sum(sum(abs(x))));
         
@@ -441,6 +450,5 @@ params.bg_info = bg_info;
 %end
 
 %%
-imagesc(xhat_out(:,:,-5)), colormap gray, axis image, caxis([0 0.1])
 % imagesc(brain_recon.xhat(:,:,10))
 % axis image
