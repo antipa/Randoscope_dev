@@ -1,7 +1,6 @@
 folder = uigetdir('.','Pick folder containing mat files');
 
 out_folder = uigetdir(folder,'Pick output folder');
-
 %%
 files = dir(folder);
 good_count = 0;
@@ -48,7 +47,7 @@ array_normed = min(1.1*full_array/full_norm,1);
 
 for t = 1:Nt
     for z = 1:Nz
-        imwrite(squeeze(array_normed(:,:,z,t)),[out_folder,sprintf('/waterbear_closer_3_T_%03d_Z_%03d.png',t_ind(t),file_in.params.z_range(z))]);
+        imwrite(squeeze(array_normed(:,:,z,t)),[out_folder,sprintf('/water_T_%03d_Z_%03d.png',t_ind(t),file_in.params.z_range(z))]);
         z
         t
     end

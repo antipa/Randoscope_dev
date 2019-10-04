@@ -7,10 +7,12 @@
 %psf_path = 'D:\Kyrollos\RandoscopeNanoscribe\RandoscopeNanoscribe\Miniscope3D\psf_svd_12comps_23z_240xy_20190619';
 %psf_path = 'D:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1';
 
-psf_path = 'T:\Antipa\Randoscopev2_PSFs\Data_8_21_2019\SVD_2_5um_PSF_20um_1_green_channel';
+psf_path = 'T:\Antipa\Randoscopev2_PSFs\20190912_recalibration\SVD_2p5_um_PSF_5um_1_green_channel';
 %psf_path = 'T:\Antipa\Randoscopev2_PSFs\20190912_recalibration\SVD_2p5_um_PSF_5um_1_green_channel';
-comps_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_components_green.mat'];
-weights_path = [psf_path,'/SVD_2_5um_PSF_20um_1_ds2_weights_interp_green.mat'];
+comps_path = [psf_path,'\SVD_2_5um_PSF_5um_1_ds2_components_green_SubAvg.mat'];
+weights_path = [psf_path,'\SVD_2_5um_PSF_5um_1_ds2_weights_interp_green_SubAvg.mat'];
+
+%%
 %comps_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_components_green_NoFro.mat'];
 %weights_path = [psf_path,'/SVD_2_5um_PSF_5um_1_ds2_weights_interp_green_NoFro.mat'];
 fprintf('loading components\n')
@@ -88,7 +90,7 @@ params.bg_info = bg_info;
     params.ds = 4;  % Global downsampling ratio (i.e.final image-to-sensor ratio)
     params.ds_psf = 2;   %PSf downsample ratio (how much to further downsample -- if preprocessing included downsampling, use 1)
     params.ds_meas = params.ds/params.ds_raw;   % How much to further downsample measurement?
-    params.z_range = 11:54; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
+    params.z_range = 27:64; %Must be even number!! Range of z slices to be solved for. If this is a scalar, 2D. Use this for subsampling z also (e.g. 1:4:... to do every 4th image)
     params.rank = 14;
     useGpu = 1; %cannot fit ds=2 on gpu unless we limit z range!!!!
     params.psf_norm = 'fro';   %Use max, slice, fro, or none
@@ -146,8 +148,8 @@ params.bg_info = bg_info;
     % Read in data
     
 %%
-    im_tag = 'PsfAvgBgTest';
-    for tiff_slice = 1:100
+    im_tag = 'TwoBearsOneScope';
+    for tiff_slice = 12:100
         params.tiff_slice = tiff_slice;   %Slices to load from tiff stack. If 'all' used, it will average.
         %params.tiff_slice = 'all';
         switch lower(params.data_tiff_format)
@@ -323,7 +325,7 @@ params.bg_info = bg_info;
                        
                     end
                 elseif Nz>20
-                    options.stepsize = .02;
+                    options.stepsize = .015;
                 end
                 
             else
@@ -334,7 +336,7 @@ params.bg_info = bg_info;
             options.stepsize = 0.7e-3;
         end
         
-        params.tau1 = options.stepsize*.06e-4; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
+        params.tau1 = options.stepsize*.3e-4; %was 0.5e-7   %.000005 works pretty well for v1 camera, .0002 for v2
         tau_iso = (.25e-4);
         params.z_tv_weight = 1;    %z weighting in anisotropic TV
         tau2 = .001;
@@ -392,7 +394,16 @@ params.bg_info = bg_info;
             TVpars.MAXITER = gpuArray(TVpars.MAXITER);
             TVpars.alpha = gpuArray(TVpars.alpha);
             xinit = gpuArray(single(xinit));
-            [xhat, f2] = proxMin(grad_handle,prox_handle,xinit,gpuArray(single(b)),options);
+            success = false;
+            while success == false   %This shouldn't be necessary, but it deals with restarting when GPU runs OOM
+                try
+                    [xhat, f2] = proxMin(grad_handle,prox_handle,xinit,gpuArray(single(b)),options);
+                    success = true;
+                catch
+                    success = false;
+                end
+            end
+                    
         else
             if large
                 xinit = gpuArray(xinit);
@@ -417,6 +428,7 @@ params.bg_info = bg_info;
         
         imout = gather(xhat/prctile(xhat(:),100*(numel(xhat)-10)/numel(xhat)));   %Saturate only 10 pixels
         xhat_out = gather(xhat);
+        
         params.tau1 = gather(params.tau1);
         imbase = meas_name(1:end-4);
         mkdir([full_path, '/png/']);
@@ -424,7 +436,8 @@ params.bg_info = bg_info;
         f_out = gather(f2);
         out_names = {};
         for n= 1:size(imout,3)
-            out_names{n} = [filebase,'_',sprintf('%.3i',n),'_',im_tag,'_',tiff_string,'.png'];
+            out_names{n} = [filebase,'_',sprintf('Z_%.3i_T_',params.z_range(n)),...
+                tiff_string,'_',im_tag,'.png'];
             imwrite(imout(:,:,n),out_names{n});
             fprintf('writing image %i of %i\n',n,size(xhat,3))
         end
