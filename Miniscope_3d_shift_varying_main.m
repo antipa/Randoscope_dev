@@ -149,7 +149,7 @@ params.bg_info = bg_info;
     
 %%
     im_tag = 'TwoBearsOneScope';
-    for tiff_slice = 12:100
+    for tiff_slice = 101:150
         params.tiff_slice = tiff_slice;   %Slices to load from tiff stack. If 'all' used, it will average.
         %params.tiff_slice = 'all';
         switch lower(params.data_tiff_format)
