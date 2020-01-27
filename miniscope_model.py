@@ -1,5 +1,5 @@
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
+
 import numpy as np
 import scipy.special as scsp
 from miniscope_utils_tf import *
@@ -75,11 +75,11 @@ class Model(tf.keras.Model):
         
         self.min_r= self.Rmin
         self.max_r= self.Rmax
-        self.rlist = tfe.Variable(rlist,name='rlist', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_r, self.max_r))
+        self.rlist = tf.Variable(rlist,name='rlist', dtype = tf.float32,constraint=lambda t: tf.clip_by_value(t,self.min_r, self.max_r))
         #self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float32, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
         #self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float32, constraint=lambda t: tf.clip_by_value(t,-self.CA, self.CA))
-        self.xpos = tfe.Variable(xpos, name='xpos', dtype = tf.float32)
-        self.ypos = tfe.Variable(ypos, name='ypos', dtype = tf.float32)
+        self.xpos = tf.Variable(xpos, name='xpos', dtype = tf.float32)
+        self.ypos = tf.Variable(ypos, name='ypos', dtype = tf.float32)
         #parameters for making the lenslet surface
         self.yg = tf.constant(np.linspace(self.ygrng[0], self.ygrng[1], self.samples[0]),dtype=tf.float32)
         self.xg=tf.constant(np.linspace(self.xgrng[0], self.xgrng[1], self.samples[1]),dtype=tf.float32)
@@ -125,9 +125,9 @@ class Model(tf.keras.Model):
         self.airy_aprox_pad = pad_frac_tf(self.airy_aprox_target / tf.reduce_max(self.airy_aprox_target), self.corr_pad_frac)
 
         if target_option=='airy':
-            self.target_F = tf.square(tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.target_airy_pad), 0.))))
+            self.target_F = tf.square(tf.abs(tf.signal.fft2d(tf.complex(tf_fftshift(self.target_airy_pad), 0.))))
         elif target_option=='gaussian':
-            self.target_F = tf.abs(tf.fft2d(tf.complex(tf_fftshift(self.airy_aprox_pad), 0.)))
+            self.target_F = tf.abs(tf.signal.fft2d(tf.complex(tf_fftshift(self.airy_aprox_pad), 0.)))
         
         # Set regularization. Problem will be treated as l1 of spectral error at each depth + tau * l_inf(cross_corr)
         self.cross_corr_norm = cross_corr_norm
@@ -181,7 +181,7 @@ class Model(tf.keras.Model):
         
         psf_spect = self.gen_stack_spectrum(zstack)
         #Fcorr_2dlist = self.gen_cross_spectra(psf_spect)
-        normsize=tf.to_float(tf.shape(psf_spect)[0]*tf.shape(psf_spect)[1])
+        normsize=tf.cast((tf.shape(psf_spect)[0]*tf.shape(psf_spect)[1]),tf.float32)
         
         Rmat_tf_diag = []
         Rmat_tf_off_diag = []
@@ -191,7 +191,7 @@ class Model(tf.keras.Model):
         # This now computes diagonals and off-diagonals separately then concatenates them. this makes is easier to "find" the diagonals/off diagonals for separate treatment  later.
         for z1 in range(self.Nz):
             for z2 in range(z1, self.Nz):
-                Fcorr = tf.conj(psf_spect[z1])*psf_spect[z2]
+                Fcorr = tf.math.conj(psf_spect[z1])*psf_spect[z2]
                 #Fcorr = Fcorr_2dlist[z1][z2]
                 if z1 == z2:
                     # Difference between autocorrelation and target bandwidth
@@ -208,11 +208,11 @@ class Model(tf.keras.Model):
                         Rmat_tf_off_diag.append( self.tau * tf.reduce_sum(tf.square(tf.abs(Fcorr)/normsize)))  #changed to one norm
                     elif self.cross_corr_norm is 'log_sum_exp':   
                         # Implementation of eq. 7 from http://users.cecs.anu.edu.au/~yuchao/files/SmoothApproximationforL-infinityNorm.pdf
-                        ccorr = tf.abs(tf.ifft2d(Fcorr))
+                        ccorr = tf.abs(tf.signal.ifft2d(Fcorr))
                         Rmat_tf_off_diag.append(self.tau * self.logsumexp_param * tf.reduce_logsumexp((ccorr)/self.logsumexp_param) )
                         
                     elif self.cross_corr_norm is 'inf':
-                        Rmat_tf_off_diag.append( self.tau * tf.reduce_max(tf.abs(tf.ifft2d(Fcorr))))
+                        Rmat_tf_off_diag.append( self.tau * tf.reduce_max(tf.abs(tf.signal.ifft2d(Fcorr))))
         Rmat_tf = tf.concat([Rmat_tf_diag, Rmat_tf_off_diag],0)
                         
                         
@@ -226,7 +226,7 @@ class Model(tf.keras.Model):
         for z1 in range(tf.shape(psf_spect)[0]):
             [Fcorr[z1].append([]) for n in range(z1)]
             for z2 in range(z1,tf.shape(psf_spect)[0]):
-                Fcorr[z1].append(tf_fftshift(tf.ifft2d(tf.conj(psf_spect[z1])*psf_spect[z2])))
+                Fcorr[z1].append(tf_fftshift(tf.signal.ifft2d(tf.math.conj(psf_spect[z1])*psf_spect[z2])))
 
         return Fcorr
     
@@ -234,7 +234,7 @@ class Model(tf.keras.Model):
         Fcorr=[]
         for z1 in range(tf.shape(psf_spect)[0]):
             for z2 in range(z1,tf.shape(psf_spect)[0]):
-                Fcorr.append(tf_fftshift(tf.ifft2d(tf.conj(psf_spect[z1])*psf_spect[z2])))
+                Fcorr.append(tf_fftshift(tf.ifft2d(tf.math.conj(psf_spect[z1])*psf_spect[z2])))
 
         return Fcorr
         
@@ -268,6 +268,6 @@ class Model(tf.keras.Model):
         #Getting spectrum
 
         for z1 in range(tf.shape(zstack)[0]):
-            psf_spect.append(tf.fft2d(tf.complex(tf_fftshift(psf_pad[z1]),tf.constant(0.,dtype = tf.float32))))
+            psf_spect.append(tf.signal.fft2d(tf.complex(tf_fftshift(psf_pad[z1]),tf.constant(0.,dtype = tf.float32))))
 
         return psf_spect

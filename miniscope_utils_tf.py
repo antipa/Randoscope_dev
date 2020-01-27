@@ -1,7 +1,7 @@
 import numpy as np
 import scipy as sc
 import tensorflow as tf
-import tensorflow.contrib.eager as tfe
+
 from bridson import poisson_disc_samples
 import miniscope_utils as ms_utils
 def make_lenslet_surface(Xlist, Ylist, Rlist, xrng, yrng, samples,aperR,r_lenslet):
@@ -113,8 +113,8 @@ def make_lenslet_tf_zern(model):
         T_orig = []
     
     for n in range(model.Nlenslets):
-        sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm- model.xpos[n]))- tf.square((model.ygm-model.ypos[n])))
-                                          )-tf.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
+        sph1 = model.lenslet_offset[n]+tf.math.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm- model.xpos[n]))- tf.square((model.ygm-model.ypos[n])))
+                                          )-tf.math.real(tf.sqrt(tf.square(model.rlist[n])-tf.square(model.mean_lenslet_CA)))
         
         if np.shape(model.zernlist) != ():  # Including Zernike aberrations 
             # change to normalize by CA
@@ -141,8 +141,8 @@ def make_lenslet_tf_zern(model):
 def make_lenslet_tf(model):
         T = tf.zeros([model.samples[0],model.samples[1]])
         for n in range(model.Nlenslets):
-            sph1 = model.lenslet_offset[n]+tf.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm-
-                                                                          model.xpos[n])) - tf.square((model.ygm-model.ypos[n]))))-tf.real(tf.sqrt(tf.square(model.rlist[n]
+            sph1 = model.lenslet_offset[n]+tf.math.real(tf.sqrt(tf.square(model.rlist[n]) - tf.square((model.xgm-
+                                                                          model.xpos[n])) - tf.square((model.ygm-model.ypos[n]))))-tf.math.real(tf.sqrt(tf.square(model.rlist[n]
                                                                           )-tf.square(model.mean_lenslet_CA)))
             T = tf.maximum(T,sph1)
         aper = tf.sqrt(model.xgm**2+model.ygm**2) <= model.CA
@@ -178,7 +178,7 @@ def fftshift(spectrum, axis=-1):
   return tf.concat([b, a], axis=axis)
 
 def pad_frac_tf(x, padfrac=0):
-    pads=np.ceil(tf.to_float(tf.shape(x))*padfrac).astype('int')
+    pads=np.ceil(tf.cast(tf.shape(x),tf.float32)*padfrac).astype('int')
     paddings = tf.constant([[pads[0], pads[0]], [pads[1], pads[1]]])
     return tf.pad(x,paddings,'constant')
 
@@ -192,9 +192,9 @@ def propagate_field_freq_tf(model,U,padfrac=0):
     else:
         Fxn=model.Fx
         Fyn=model.Fy
-    Uf = tf_fftshift(tf.fft2d(tf_fftshift(U)))
+    Uf = tf_fftshift(tf.signal.fft2d(tf_fftshift(U)))
     Hf = tf_exp(2.*np.pi*model.t/model.lam * tf.sqrt(1-tf.square(model.lam*Fxn) - tf.square(model.lam*Fyn)))
-    Up = tf_fftshift(tf.ifft2d(tf_fftshift(Uf*Hf)))
+    Up = tf_fftshift(tf.signal.ifft2d(tf_fftshift(Uf*Hf)))
     if padfrac != 0:
         Up = crop2d(Up, shape_orig)
     return Up
@@ -231,8 +231,8 @@ def gen_psf_ag_tf(T,model,z_dis, obj_def, pupil_phase=0, prop_pad = 0,Grin=0,nor
             U_in = tf_exp(1*-z_dis*model.k*tf.sqrt(1-tf.square((model.xgm-model.field_list[0])/z_dis) - tf.square((model.ygm-model.field_list[1])/z_dis)))
     
     U_out = U_in * tf_exp((model.k*(model.ior-1)*T + pupil_phase))
-    amp = tf.to_float(tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA)
-    U_prop = propagate_field_freq_tf(model, tf.complex(tf.real(U_out)*amp,tf.imag(U_out)*amp), prop_pad)    
+    amp = tf.cast((tf.sqrt(tf.square(model.xgm) + tf.square(model.ygm)) <= model.CA),tf.float32)
+    U_prop = propagate_field_freq_tf(model, tf.complex(tf.math.real(U_out)*amp,tf.math.imag(U_out)*amp), prop_pad)    
     psf = tf.square(tf.abs(U_prop))
     if normalize == 'l2':
         return(psf/tf.sqrt(tf.reduce_sum(tf.square(psf)))) #DO WE NEED TO DO THIS????
@@ -329,14 +329,14 @@ def find_best_initialization(model, num_trials = 2000, save_results =False):
     init_loss,_ = loss(model, defocus_grid)
     loss_list.append(init_loss.numpy())
 
-    x_best = tfe.Variable(tf.zeros(model.Nlenslets));    
-    y_best = tfe.Variable(tf.zeros(model.Nlenslets));       
-    r_best = tfe.Variable(tf.zeros(model.Nlenslets));
+    x_best = tf.Variable(tf.zeros(model.Nlenslets));    
+    y_best = tf.Variable(tf.zeros(model.Nlenslets));       
+    r_best = tf.Variable(tf.zeros(model.Nlenslets));
     loss_best = loss_list[0]
 
-    x_worst = tfe.Variable(tf.zeros(model.Nlenslets));  
-    y_worst = tfe.Variable(tf.zeros(model.Nlenslets));       
-    r_worst = tfe.Variable(tf.zeros(model.Nlenslets));
+    x_worst = tf.Variable(tf.zeros(model.Nlenslets));  
+    y_worst = tf.Variable(tf.zeros(model.Nlenslets));       
+    r_worst = tf.Variable(tf.zeros(model.Nlenslets));
     loss_worst = loss_list[0]
 
     for i in range(0,num_trials):
