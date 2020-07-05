@@ -215,23 +215,22 @@ fwhm_contour((prep_acorr(acorrslice_uni)),0.5);
 fwhm_contour((prep_acorr(acorrslice_rand)),0.5);
 
 title('FWHM vs z')
-
-% This stuff does it by counting pixels:
-% acnorm_reg = prep_acorr(acorrslice_reg);
-% acnorm_uni = prep_acorr(acorrslice_uni);
-% acnorm_rand = prep_acorr(acorrslice_rand);
-% make_fwhm = @(x,pct)sum(x>=pct,2);
-
+colormap parula
+acnorm_reg = prep_acorr(acorrslice_reg);
+acnorm_uni = prep_acorr(acorrslice_uni);
+acnorm_rand = prep_acorr(acorrslice_rand);
+make_fwhm = @(x,pct)sum(x>=pct,2);
 
 
 
-% 
-% fwhm_uni =make_fwhm(acnorm_uni,0.5)/sc/px_obj;
-% fwhm_reg = make_fwhm(acnorm_rand,0.5)/sc/px_obj;
-% plot(xplot,flipud(fwhm_uni))
-% plot(xplot,flipud(fwhm_reg))
+
+
+fwhm_uni =make_fwhm(acnorm_uni,0.5)/sc/px_obj;
+fwhm_reg = make_fwhm(acnorm_rand,0.5)/sc/px_obj;
+plot(xplot,flipud(fwhm_uni))
+plot(xplot,flipud(fwhm_reg))
 legend('Regular','unifocal','designed')
-hold off 
+hold off
 
 %%
 
