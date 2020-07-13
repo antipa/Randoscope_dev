@@ -1,16 +1,18 @@
 %%
-pth = 'D:\Randoscope\dataforrebuttal\PSFs';
-in = load([pth,'\psf_uni_middle.mat']);
+pth = 'D:\Randoscope\dataforrebuttal\newpsf';
+in = load([pth,'\psf_uni_ds.mat']);
 psf_stack_uni = permute((in.psf_noaber_uni_mid_ds), [2 3 1]);
 
 
-in = load([pth,'\psf_multi_middle.mat']);
+in = load([pth,'\psf_multi_ds.mat']);
 %psf_stack_rando = permute(in.psf_montebest_ds, [2 3 1]);
 psf_stack_rando = permute((in.psf_noaber_multi_mid_ds), [2 3 1]);
 
 
-in = load([pth,'\psf_regular_middle.mat']);
+in = load([pth,'\psf_reg_ds.mat']);
 psf_stack = permute((in.psf_noaber_reg_mid_ds), [2 3 1]);
+
+%%
 h6 = figure(6),clf
 h1 = figure(1),clf
 h5 = figure(5),clf
@@ -25,24 +27,26 @@ ripple_uni = []
 % fc = 2*NA/lambda
 % Rayleigh = 3.5 = .61 lambda/NA
 
-px = 7.3;  %Pixel size in microns/pixel in sensor space
+px = 4.541;  %Pixel size in microns/pixel in sensor space
 Mag = 5.2;   %Magnification
 px_obj = px/Mag;   %Object space microns/pixel
-[Ny,Nx] = size(psf_rando);
+[Ny,Nx] = size(psf_stack_rando(:,:,1));
+dz = 5;   %Slice spacing in microns (object space)
 R = 3.5;
 lambda = 0.51;
 NA = .61*lambda/R;
-fc_adjust = 1/2;
+fc_adjust = 1; %I assume this is trying to get it to match, ill set to 1
 fc = 2*NA/lambda*fc_adjust;   %Cycles per micron
 fmax = 1/2/px_obj;
+nbins=200;
 fgrid_rad = (0:nbins-1)/nbins*fmax;
 df_rad = mean(diff(fgrid_rad));
 fc_rad_px = fc/df_rad;
 fgrid_lin = (0:Ny/2-1)/Ny*2*fmax;
 fc_grid_px = fc/mean(diff(fgrid_lin));
 
-[X,Y] = meshgrid(-255.5:1:255.5,-255.5:1:255.5);
-c = sqrt(X.^2+Y.^2)<=(fc_grid_px+3);
+[X,Y] = meshgrid(-floor(Ny/2)+.5:1:floor(Ny/2)-.5,-floor(Ny/2)+.5:1:floor(Ny/2)-.5);
+c = sqrt(X.^2+Y.^2)<=(fc_grid_px+3);   %The +3 just prevents weird edges in radial averaging out to fc
 fftcorr = @(x,y)gather(real(ifft2(fft2(ifftshift(x)).*conj(fft2(y)))));
 c2 = sqrt(X.^2+Y.^2)<=fc_grid_px/2;
 c2 = fftcorr(c2,c2);
@@ -54,7 +58,7 @@ Nz =72;
 Astar = @(x)c.*(1./(abs(x)+.00000001));
 [X,Y] = meshgrid(1:512,1:512);
 mmm = X>240 & X<275 & Y<255 & Y>230;
-for zplane = 40
+for zplane = 1:72
     %zplane = 24
     
     psf_uni=psf_stack_uni(:,:,zplane);%6use 20 and 60
@@ -68,9 +72,9 @@ for zplane = 40
     psf_regular = psf_regular/sum(sum(psf_regular));
     
     %This plots spectrum of one point
-    psfMask = psf_uni .* mmm;
-    spectMask = fftshift(abs(fft2(ifftshift(psfMask))));
-    [spectrad, bns] = radialavg(spectMask,nbins);
+%     psfMask = psf_uni .* mmm;
+%     spectMask = fftshift(abs(fft2(ifftshift(psfMask))));
+%     [spectrad, bns] = radialavg(spectMask,nbins);
     set(0,'CurrentFigure',h1)
     clf
     subplot(1,3,1)
@@ -80,12 +84,12 @@ for zplane = 40
     title('reg')
     
     subplot(1,3,2)
-%     imagesc(psfMask)
-%     axis image
-%     caxis([0 .002]);
-    plot(bns*fmax,spectrad)
-    hold on
-    line([fc fc],[.05 .05])
+    imagesc(psf_uni)
+    axis image
+    caxis([0 .002]);
+%     plot(bns*fmax,spectrad)
+%     hold on
+%     line([fc fc],[.05 .05])
     title('uni')
     hold off
     subplot(1,3,3)
@@ -111,7 +115,7 @@ for zplane = 40
     ripple_reg(zplane) = ripple_err(psf_regular,c2);
     ripple_uni(zplane) = ripple_err(psf_uni,c2);
     
-    nbins = 200;
+    %nbins = 200;
     [psavg, avgbins] = radialavg(abs(psfspect),nbins);
     [psavg_rando, avgbins] = radialavg(abs(psfspect_rando),nbins);
     [psavg_uni,avgbins] = radialavg(abs(psfspect_uni),nbins);
@@ -190,12 +194,29 @@ plot(zvec,Ascore_uni_sm,'k','LineWidth',2)
 plot(zvec,Ascore_rand_sm,'r','LineWidth',2)
 % a = gca
 % a.XTick = linspace(0
-legend('Regular unifocal','irregular unifocal','irregular multifocal (ours)')
+legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)')
 title('sum(1/|MTF|^2)')
 xlabel('depth \mu m')
 xlim([0 360-5])
 ylim([0 max(Ascore_uni_sm(:))])
 ylabel('sum(1/|MTF|)')
+hold off
+
+figure(9),clf
+
+semilogy(zvec,Ascore_reg_sm,'b','LineWidth',2)
+hold on
+semilogy(zvec,Ascore_uni_sm,'k','LineWidth',2)
+semilogy(zvec,Ascore_rand_sm,'r','LineWidth',2)
+% a = gca
+% a.XTick = linspace(0
+legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)')
+title('sum(1/|MTF|^2)')
+xlabel('depth \mu m')
+xlim([0 (Nz-1)*dz])
+ylim([0 max(Ascore_uni_sm(:))])
+
+grid on
 hold off
 %%
 
@@ -206,7 +227,7 @@ hold on
 plot(ripple_uni,'k','LineWidth',2)
 plot(ripple_rando,'r','LineWidth',2)
 
-legend('Regular unifocal','irregular unifocal','irregular multifocal (ours)')
+legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)')
 title('frequency space error')
 hold off
 mxc = 14;
@@ -265,7 +286,7 @@ title('FWHM vs z')
 % fwhm_reg = make_fwhm(acnorm_rand,0.5)*px_obj*2;
 % plot(xplot,flipud(fwhm_uni))
 % plot(xplot,flipud(fwhm_reg))
-legend('Regular','unifocal','designed')
+legend('regular','unifocal','designed')
 hold off 
 
 %%
@@ -276,37 +297,53 @@ hold off
 % plot(ripple_uni,'k','LineWidth',2)
 % plot(ripple_rando,'r','LineWidth',2)
 % 
-% legend('Regular unifocal','irregular unifocal','irregular multifocal (ours)')
+% legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)')
 
 zout = 1;
-zin = 40
+zin = 41;
+zout2 = 72;
 figure(13)
 clf
-
-a1 = semilogy(fgrid_rad,Astar_reg_mat(zout,:),'k-.','LineWidth',2)
+ymin = 100;
+c_ruf = 'b'
+semilogy(fgrid_rad,Astar_reg_mat(zout,:),c_ruf,'LineWidth',2)
 hold on
-a2 = semilogy(fgrid_rad,Astar_uni_mat(zout,:),'k','LineWidth',2)
-a3 = semilogy(fgrid_rad,Astar_rand_mat(zout,:),'r','LineWidth',2)
+semilogy(fgrid_rad,Astar_uni_mat(zout,:),'k','LineWidth',2)
+semilogy(fgrid_rad,Astar_rand_mat(zout,:),'r','LineWidth',2)
 %line([fc, fc],[1 1e12])
-axis([0 fc 10 max(Astar_reg_mat(zout,:))])
-legend('Regular unifocal','irregular unifocal','irregular multifocal (ours)','Location','southeast')
-title('z=0 (-200 \mu m out of focus)')
+axis([0 fc ymin max(Astar_reg_mat(zout,:))])
+legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)','Location','southeast')
+title(['z=',num2str((zout-1)*dz),' (',num2str((zout-zin)*dz),' micron out of focus)'])
+grid on
 hold off
 
 figure(14)
 clf
-semilogy(fgrid_rad,Astar_reg_mat(zin,:),'k-.','LineWidth',2)
+semilogy(fgrid_rad,Astar_reg_mat(zin,:),c_ruf,'LineWidth',2)
 hold on
 semilogy(fgrid_rad,Astar_uni_mat(zin,:),'k','LineWidth',2)
 semilogy(fgrid_rad,Astar_rand_mat(zin,:),'r','LineWidth',2)
-axis([0 fc 10 max(Astar_reg_mat(zout,:))])
-legend('Regular unifocal','irregular unifocal','irregular multifocal (ours)','Location','southeast')
-title('z=200 \mu m (In focus)')
-
+axis([0 fc ymin max(Astar_reg_mat(zout,:))])
+legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)','Location','southeast')
+title(['z=',num2str((zin-1)*dz),' (',num2str((zin-zin)*dz),' micron out of focus)'])
+grid on
 hold off
 
-% Same thing but linear scale
 figure(15)
+clf
+semilogy(fgrid_rad,Astar_reg_mat(zout2,:),c_ruf,'LineWidth',2)
+hold on
+semilogy(fgrid_rad,Astar_uni_mat(zout2,:),'k','LineWidth',2)
+semilogy(fgrid_rad,Astar_rand_mat(zout2,:),'r','LineWidth',2)
+%line([fc, fc],[1 1e12])
+axis([0 fc ymin max(Astar_reg_mat(zout,:))])
+legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)','Location','southeast')
+title(['z=',num2str((zout2-1)*dz),' (',num2str((zout2-zin)*dz),' micron out of focus)'])
+grid on
+hold off
+
+%% Same thing but linear scale
+figure(16)
 clf
 
 a1 = plot(fgrid_rad,Astar_reg_mat(zout,:),'k-.','LineWidth',2)
@@ -315,23 +352,23 @@ a2 = plot(fgrid_rad,Astar_uni_mat(zout,:),'k','LineWidth',2)
 a3 = plot(fgrid_rad,Astar_rand_mat(zout,:),'r','LineWidth',2)
 %line([fc, fc],[1 1e12])
 axis([0 fc 10 max(Astar_reg_mat(zout,:))])
-legend('Regular unifocal','irregular unifocal','irregular multifocal (ours)','Location','northwest')
+legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)','Location','northwest')
 title('z=0 (-200 \mu m out of focus)')
 hold off
 
-figure(16)
+figure(17)
 clf
 plot(fgrid_rad,Astar_reg_mat(zin,:),'k-.','LineWidth',2)
 hold on
 plot(fgrid_rad,Astar_uni_mat(zin,:),'k','LineWidth',2)
 plot(fgrid_rad,Astar_rand_mat(zin,:),'r','LineWidth',2)
 axis([0 fc 10 max(Astar_reg_mat(zout,:))])
-legend('Regular unifocal','irregular unifocal','irregular multifocal (ours)','Location','northwest')
+legend('regular unifocal','nonuniform unifocal','nonuniform multifocal (ours)','Location','northwest')
 title('z=200 \mu m (In focus)')
 
 hold off
 %%
-outpth = 'D:\\Randoscope\\dataforrebuttal\\PSFs'
+outpth = 'D:\\Randoscope\\dataforrebuttal\\PSFsKY'
 vec = @(x)x(:);
 imnorm = max([max(vec(psf_stack(:,:,zin))) max(vec(psf_stack_uni(:,:,zin))) max(vec(psf_stack_rando(:,:,zin)))])
 cmap = double(imread(['D:\Randoscope\dataforrebuttal\cmap_imagej_fire.tif']))/255
@@ -389,7 +426,7 @@ corrmat_rando = zeros(Nz,Nz);
 %%
 dot_prod = @(x,n,m)gather(sum(sum(x(:,:,n).*x(:,:,m))));
 max_corr = @(x,n,m)max(max(fftcorr(x(:,:,n),x(:,:,m))));
-figure(9),clf
+figure(29),clf
 for nn = 1:Nz
     for mm = nn:Nz
         axmat_uni(nn,mm) = dot_prod(psf_stack_uni,nn,mm);
@@ -402,38 +439,120 @@ for nn = 1:Nz
     subplot(2,3,1)
     imagesc(axmat_uni)
     axis image
-    
+    caxis([0 .06])
     title('uni')
     
     subplot(2,3,2)
     imagesc(axmat_regular)
     axis image
-    
+    caxis([0 .06])
     title('regular')
     
     subplot(2,3,3)
     imagesc(axmat_rando)
     axis image
-    
+    caxis([0 .06])
     title('rando')
     
     subplot(2,3,4)
     imagesc(corrmat_uni)
     axis image
-    
+    caxis([0 .06])
     title('uni maxcorr')
     
     subplot(2,3,5)
     imagesc(corrmat_regular)
     axis image
-    
+    caxis([0 .06])
     title('regular maxcorr')
     
     subplot(2,3,6)
     imagesc(corrmat_rando)
     axis image
-    
+    caxis([0 .06])
     title('rando maxcorr')
     drawnow
     
 end
+%%
+subplot(2,3,1)
+    imagesc(axmat_uni)
+    axis image
+    caxis([0 .06])
+    title('uni')
+    
+    subplot(2,3,2)
+    imagesc(axmat_regular)
+    axis image
+    caxis([0 .06])
+    title('regular')
+    
+    subplot(2,3,3)
+    imagesc(axmat_rando)
+    axis image
+    caxis([0 .06])
+    title('rando')
+    
+    subplot(2,3,4)
+    imagesc(corrmat_uni)
+    axis image
+    caxis([0 .06])
+    title('uni maxcorr')
+    
+    subplot(2,3,5)
+    imagesc(corrmat_regular)
+    axis image
+    caxis([0 .06])
+    title('regular maxcorr')
+    
+    subplot(2,3,6)
+    imagesc(corrmat_rando)
+    axis image
+    caxis([0 .06])
+    title('rando maxcorr')
+    drawnow
+
+%%
+subplot(2,3,1)
+imagesc(log10(axmat_uni))
+axis image
+caxis([-3   -0.9735])
+title('uni')
+
+subplot(2,3,2)
+imagesc(log10(axmat_regular))
+axis image
+caxis([-3   -0.9735])
+title('regular')
+
+subplot(2,3,3)
+imagesc(log10(axmat_rando))
+axis image
+caxis([-3   -0.9735])
+title('rando')
+
+subplot(2,3,4)
+imagesc(log10(corrmat_uni))
+axis image
+caxis([-3   -0.9735])
+title('uni maxcorr')
+
+subplot(2,3,5)
+imagesc(log10(corrmat_regular))
+axis image
+caxis([-3   -0.9735])
+title('regular maxcorr')
+
+subplot(2,3,6)
+imagesc(log10(corrmat_rando))
+axis image
+caxis([-3   -0.9735])
+title('rando maxcorr')
+drawnow
+%%
+figure(30)
+clf
+contour(axmat_rando,[max(axmat_rando(:))/2 max(axmat_rando(:))/2],'r')
+hold on
+contour(axmat_regular,[max(axmat_regular(:))/2 max(axmat_regular(:))/2],'k')
+contour(axmat_uni,[max(axmat_uni(:))/2 max(axmat_uni(:))/2],'k-.')
