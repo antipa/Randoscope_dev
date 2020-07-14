@@ -2,27 +2,27 @@
 % onto grid relevant to out system.
 px = 4.541;  %Pixel size in microns/pixel in sensor space
 Mag = 5.2;   %Magnification
-dx = px/Mag;   %Object space microns/pixel
+px_obj = px/Mag;   %Object space microns/pixel
 dz = 5;   %microns
 
-FoVx = 512*dx;
-FoVy = 512*dx;
+FoVx = 512*px_obj;
+FoVy = 512*px_obj;
 FoVz = 72*dz;
 
-Ny = round(FoVy / dx);
-Nx = round(FoVx / dx);
+Ny = round(FoVy / px_obj);
+Nx = round(FoVx / px_obj);
 Nz = round(FoVz / dz);
 
 zcent = 200;
 
-grid_x = [-Nx/2+.5 : Nx/2-.5]*dx;  %microns
-grid_y = [-Ny/2+.5 : Ny/2-.5]*dx;
+grid_x = [-Nx/2+.5 : Nx/2-.5]*px_obj;  %microns
+grid_y = [-Ny/2+.5 : Ny/2-.5]*px_obj;
 grid_z = [0:Nz-1]*dz - zcent;
 
 [X,Y,Z] = meshgrid(grid_x,grid_y,grid_z);
 
 upsamp = 5; %upsample rate for creating bars. 
-dxr = dx/upsamp;
+dxr = px_obj/upsamp;
 dzr = dz/upsamp;
 
 % Make these monotically increasing!
@@ -43,11 +43,12 @@ xz = zeros(Nz,Nx);
 ngz = 4;
 
 zextent_r = size(px_precompute{end},1);  % in pixels
-zextent_um = zextent*dzr;
+zextent_um = zextent_r*dzr;
 xextent_r = size(px_precompute{end},2);
 xextent_um = xextent_r*dxr;
 
-zstart_um = [0 105-zextent_um/2 200-zextent_um/2 360-zextent_um*4.2];
+%zstart_um = [0 125-zextent_um/2 200-zextent_um/2 360-zextent_um];
+zstart_um = [0 200-zextent_um/2 360-zextent_um]
 xstart_um = [-1.5*xextent_um -.5*xextent_um .5*xextent_um];
 
 zstart_r = max(round(zstart_um/dzr),1);
@@ -110,7 +111,7 @@ slab_out = imresize3_box(slab,round(size(slab)/upsamp));
 stackout = zeros(Ny,Nx,Nz);
 stackout(1+Ny/2-ceil(size(slab_out,1)/2):Ny/2+floor(size(slab_out,1)/2),:,:) = slab_out;
 
-imagesc(squeeze(max(stackout,[],3)));
+imagesc(squeeze(max(stackout,[],1)));
 axis image
 
 % Then resample to target grid

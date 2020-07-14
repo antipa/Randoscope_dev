@@ -1,10 +1,19 @@
 %Load impulse response stack, h
-design_cells = {'random_multifocal','uni','regular','optimized'}
+design_cells = {'optimized','worst_random','uni','regular'}
+test_obj = 'axial_usaf';
 psf_folder = 'D:\Randoscope\dataforrebuttal\newpsf\';
 dtstamp = datestr(datetime('now'),'YYYYmmDD_hhMMss');
-savepath = ['D:\\Randoscope\\dataforrebuttal\\newpsf\\3D_recons\\',dtstamp,'\\'];
+
+switch lower(test_obj)
+    case('dots')
+        test_obj_file = 'D:\Randoscope\dataforrebuttal\newpsf\test_volumes\pt_grid_512x512x72.mat';
+    case('axial_usaf')
+        test_obj_file = 'D:\Randoscope\dataforrebuttal\newpsf\test_volumes\axial_usaf_512x512x72.mat';
+end
+
+savepath = ['D:\\Randoscope\\dataforrebuttal\\newpsf\\3D_recons\\',dtstamp,'_',test_obj,'\\'];
 mkdir(savepath)
-test_obj_file = 'D:\Randoscope\dataforrebuttal\newpsf\test_volumes\pt_grid_512x512x72.mat';
+
 h1 = figure(1);clf
 options.fighandle = h1;
 options.stepsize = 2e-2;
@@ -48,9 +57,13 @@ for regidx = 1:numel(reg_list)
                 h_in = load([psf_folder,psf_file]);
                 ht = permute(h_in.psf_noaber_uni_mid_ds,[2 3 1]);
             case('regular')
-                psf_file = 'psf_reg_ds.mat'
+                psf_file = 'psf_reg_ds.mat';
                 h_in = load([psf_folder,psf_file]);
                 ht = permute(h_in.psf_noaber_reg_mid_ds,[2 3 1]);
+            case('worst_random')
+                psf_file = 'psf_worstInit_ds';
+                h_in = load([psf_folder,psf_file]);
+                ht = permute(h_in.psf_worstInit_ds,[2 3 1]);
         end
         
         
@@ -173,10 +186,10 @@ for regidx = 1:numel(reg_list)
                 xhat_best_ssim = gather(xhat);
                 tau_best_ssim = gather(tau);
             end
-            
+            xhat_current = gather(xhat);
             if improvement
                 save([savepath,'points_',design,'_photons_',num2str(photon_count),...
-                    '_PSNR_',num2str(psnr_best),'_ssim_',num2str(ssim_list(ii)),'_',regularizer,'.mat'],'xhat_best','tau_best',...
+                    '_PSNR_',num2str(psnr_best),'_ssim_',num2str(ssim_list(ii)),'_',regularizer,'.mat'],'xhat_current','xhat_best','tau_best',...
                     'tau_list','psnr_list','psnr_best','psf_file','b','test_obj_file',...
                     'prox_handle','regularizer','ssim_list','xhat_best_ssim','tau_best_ssim',...
                     'boundary_condition')
