@@ -3,13 +3,12 @@ test_dir = 'D:\Randoscope\dataforrebuttal\newpsf\3D_recons\20200714_002550\'
 gt = load('D:\Randoscope\dataforrebuttal\newpsf\test_volumes\pt_grid_512x512x72.mat');
 uni_file = uigetfile([test_dir,'*uni*'],'select unifocal');
 reg_file = uigetfile([test_dir,'*regular*'],'select regular');
-rand_file = uigetfile([test_dir,'*random*'],'select random multifocal');
-opt_file = uigetfile([test_dir,'*opt*'],'select optimized');
+
 %%
-xhat_opt = load([test_dir,opt_file])
-xhat_reg = load([test_dir,reg_file])
-xhat_uni = load([test_dir,uni_file])
-xhat_rand = load([test_dir,rand_file]);
+xhat_opt = load([test_dir,uni_file])
+xhat_reg = load([test_dir,'points_regular_photons_1000_PSNR_43.5167_ssim_0.99634_tv.mat'])
+xhat_uni = load([test_dir,'points_uni_photons_1000_PSNR_42.9962_ssim_0.99625_tv.mat'])
+xhat_rand = load([test_dir,'points_random_multifocal_photons_1000_PSNR_44.7288_ssim_0.99743_tv.mat']);
 
 %xhat_uni = load('D:\Randoscope\dataforrebuttal\newpsf\3D_recons\July_10_2020\zebrafish_uni_photons_1000_PSNR_28.516.mat');
 %xhat_opt = load('D:\Randoscope\dataforrebuttal\newpsf\3D_recons\July_10_2020\zebrafish_optimized_photons_1000_PSNR_29.1012.mat');

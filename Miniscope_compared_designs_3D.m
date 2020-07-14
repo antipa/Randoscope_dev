@@ -27,6 +27,8 @@ init_style = 'zero';
 Nz = 72;
 %%
 tau_list = logspace(-4,-1.5,10);
+
+
 reg_list = {'tv'};
 for regidx = 1:numel(reg_list)
     for idx = 1:numel(design_cells)
