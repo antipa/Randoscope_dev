@@ -1,6 +1,6 @@
 %Load impulse response stack, h
-design_cells = {'optimized','worst_random','uni','regular'}
-test_obj = 'axial_usaf';
+design_cells = {'worst_random'}    %Options: {'random_multifocal','optimized','worst_random','uni','regular'}
+test_obj = 'dots';   %Options: 'dots' or 'axial_usaf';
 psf_folder = 'D:\Randoscope\dataforrebuttal\newpsf\';
 dtstamp = datestr(datetime('now'),'YYYYmmDD_hhMMss');
 
@@ -35,7 +35,7 @@ options.force_real = 1;
 init_style = 'zero';
 Nz = 72;
 %%
-tau_list = logspace(-4,-1.5,10);
+tau_list = logspace(-4,-2,10);
 
 
 reg_list = {'tv'};

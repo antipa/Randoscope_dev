@@ -108,6 +108,7 @@ slab_out = imresize3_box(slab,round(size(slab)/upsamp));
 
 
 %%
+
 stackout = zeros(Ny,Nx,Nz);
 stackout(1+Ny/2-ceil(size(slab_out,1)/2):Ny/2+floor(size(slab_out,1)/2),:,:) = slab_out;
 
