@@ -120,24 +120,71 @@ psnr(double(xhat_opt.xhat_best(:,:,zstart:end)),gt_obj(:,:,zstart:end),1000)
 psnr(double(xhat_uni.xhat_best(:,:,zstart:end)),gt_obj(:,:,zstart:end),1000)
 psnr(double(xhat_rand.xhat_best(:,:,zstart:end)),gt_obj(:,:,zstart:end),1000)
 
-%%
+%% Prepare images for writing
 dtstamp = datestr(datetime('now'),'YYYYmmDD_hhMMss');
+
+%%
 px = 4.541;  %Pixel size in microns/pixel in sensor space
 Mag = 5.2;   %Magnification
 px_obj = px/Mag;   %Object space microns/pixel
 dz = 5;   %microns
-
 pmax = 1200;
 
 design_list = {'reg','worst_rand','opt','uni'};
 
-for n = 1:numel(design_list)
-    filebase = [test_dir,design_list{n}];
-    slicefile = [filebase,'_xz_slice.png']
-    
-end
+xyprojop = @(x)squeeze(max(x,[],3));
+yzprojop = @(x)squeeze(max(x,[],2));
+xzprojop = @(x)squeeze(max(x,[],1));
 
-slice_op = @(x)squeeze(x(256,:,:))
-xout_reg.slice = slice_op(xhat_reg.xhat_best);
-imagesc(xout_reg.slice)
-caxis([0 pmax])
+for n = 1:numel(design_list)
+    file_deets = containers.Map({'pixel_size_microns','z_spacing_microns','max_value','photon_max_count','design'},...
+        {px_obj,dz,pmax,1000,design_list{n}});
+    filebase = [test_dir,dtstamp,'_',design_list{n}];
+    slicefile = [filebase,'_xz_slice'];
+    xyproj = [filebase,'_xy_maxproj'];
+    yzproj = [filebase,'_yz_maxproj'];
+    xzproj = [filebase,'_xz_maxproj'];
+    switch lower(design_list{n})
+        case('reg')
+            xhat = xhat_reg.xhat_best;
+            
+            from_file = [test_dir,reg_file];
+            cur_psnr = xhat_reg.psnr_best;
+            
+        case('uni')
+            xhat=xhat_uni.xhat_best;
+            from_file=[test_dir,uni_file];
+            cur_psnr = xhat_uni.psnr_best;
+        case('opt')
+            xhat=xhat_opt.xhat_best;
+            from_file=[test_dir,opt_file];
+            cur_psnr = xhat_opt.psnr_best;
+        case('worst_rand')
+            xhat=xhat_rand.xhat_best;
+            from_file=[test_dir,rand_file];
+            cur_psnr=xhat_rand.psnr_best;
+    end
+    slice_out = gray2imagejfire(slice_op(xhat)/pmax);
+    xy_out = gray2imagejfire(xyprojop(xhat/pmax));
+    xz_out = gray2imagejfire(xzprojop(xhat/pmax));
+    yz_out = gray2imagejfire(yzprojop(xhat/pmax));
+    
+    file_deets('processed_from_file')=from_file;
+    file_deets('volume psnr')=cur_psnr;
+    
+    imwrite(slice_out,[slicefile,'.png']);
+    containers2file([slicefile,'.txt'],file_deets);
+    
+    imwrite(xy_out,[xyproj,'.png']);
+    containers2file([xyproj,'.txt'],file_deets);
+    imwrite(yz_out,[yzproj,'.png']);
+    containers2file([yzproj,'.txt'],file_deets);
+    imwrite(xz_out,[xzproj,'.png']);
+    containers2file([xzproj,'.txt'],file_deets);
+end
+fclose('all')
+
+
+
+
+imagesc(slice_out)

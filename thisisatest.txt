@@ -1,0 +1,7 @@
+design	uni
+max_value	1.200000e+03
+photon_max_count	1.000000e+03
+pixel_size_microns	8.732692e-01
+processed_from_file	D:\Randoscope\dataforrebuttal\newpsf\3D_recons\20200714_165924_axial_usaf\points_uni_photons_1000_PSNR_34.0564_ssim_0.97965_tv.mat
+volume psnr	3.405643e+01
+z_spacing_microns	5.000000e+00

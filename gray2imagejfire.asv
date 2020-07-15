@@ -1,0 +1,7 @@
+function out = gray2imagejfire(im)
+% Pass in image im and apply imageJ fire lut up to value 1 in image im.
+% Values over 1 will be clipped as will values below 0.
+cmap = double(imread(['D:\Randoscope\dataforrebuttal\cmap_imagej_fire.tif']))/255
+ncolors = length(colormap(cmap));
+out = 
+make_outim = @(im,cmap,nm)ind2rgb(gray2ind(uint8(im(r1:r2,c1:c2)/nm*255),length(colormap(cmap))),colormap(cmap));
