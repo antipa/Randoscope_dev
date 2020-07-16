@@ -1,8 +1,14 @@
-function out = gray2imagejfire(im)
+function out = gray2imagejfire(im,varargin)
 % Pass in image im and apply imageJ fire lut up to value 1 in image im.
 % Values over 1 will be clipped as will values below 0.
-cmap = get_cmap;
+% Optional second argument: colormap matrix to use instead of imagejfire
+if nargin>1
+    cmap = varargin{1};
+else
+    cmap = get_cmap;
+end
 ncolors = length(cmap);
+ncolors
 out = ind2rgb(gray2ind(uint8(im*255),ncolors),cmap);
 
 function c = get_cmap()

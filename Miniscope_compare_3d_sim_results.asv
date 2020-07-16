@@ -1,16 +1,19 @@
 %gt = load('D:\Randoscope\dataforrebuttal\newpsf\3D_recons\zebrafish_gt_5pct_512x512x60')
-test_dir = 'D:\Randoscope\dataforrebuttal\newpsf\3D_recons\20200714_165924_axial_usaf\'
+test_dir = 'D:\Randoscope\dataforrebuttal\newpsf\3D_recons\20200714_002550_dots\'
 
 uni_file = uigetfile([test_dir,'*uni*'],'select unifocal');
 reg_file = uigetfile([test_dir,'*regular*'],'select regular');
 rand_file = uigetfile([test_dir,'*random*'],'select random multifocal');
 opt_file = uigetfile([test_dir,'*opt*'],'select optimized');
 %%
+[gtfilename,gtpath] = uigetfile('D:\Randoscope\dataforrebuttal\newpsf\test_volumes\');
+gtfile = [gtpath,gtfilename];
 xhat_opt = load([test_dir,opt_file])
 xhat_reg = load([test_dir,reg_file])
 xhat_uni = load([test_dir,uni_file])
 xhat_rand = load([test_dir,rand_file]);
-gt = load('D:\Randoscope\dataforrebuttal\newpsf\test_volumes\axial_usaf_512x512x72.mat')
+%axial_usaf_512x512x72.mat';
+gt = load(gtfile);
 %xhat_uni = load('D:\Randoscope\dataforrebuttal\newpsf\3D_recons\July_10_2020\zebrafish_uni_photons_1000_PSNR_28.516.mat');
 %xhat_opt = load('D:\Randoscope\dataforrebuttal\newpsf\3D_recons\July_10_2020\zebrafish_optimized_photons_1000_PSNR_29.1012.mat');
 %xhat_rand = load('D:\Randoscope\dataforrebuttal\newpsf\3D_recons\July_10_2020\zebrafish_random_multifocal_photons_1000_PSNR_29.0519.mat');
@@ -130,10 +133,12 @@ px_obj = px/Mag;   %Object space microns/pixel
 dz = 5;   %microns
 pmax = 1200;
 
-design_list = {'reg','worst_rand','opt','uni'};
+design_list = {'reg','worst_rand','opt','uni','gt'};
 
-xyprojop = @(x)squeeze(max(
-
+xyprojop = @(x)squeeze(max(x,[],3));
+yzprojop = @(x)squeeze(max(x,[],2));
+xzprojop = @(x)squeeze(max(x,[],1));
+obj_type = 'dots';
 for n = 1:numel(design_list)
     file_deets = containers.Map({'pixel_size_microns','z_spacing_microns','max_value','photon_max_count','design'},...
         {px_obj,dz,pmax,1000,design_list{n}});
@@ -161,12 +166,41 @@ for n = 1:numel(design_list)
             xhat=xhat_rand.xhat_best;
             from_file=[test_dir,rand_file];
             cur_psnr=xhat_rand.psnr_best;
+        case('gt')
+            xhat=gt.stackout*1000;
+            from_file = gtfile;
+            cur_psnr = 'N/A';
+            switch lower(obj_type)
+                case('usaf')
+                    file_deets('bar spacing z um')=gt.bardepth_um;
+                    file_deets('bar spacing x um')=gt.barwidth_um;
+                    file_deets('x start um')=gt.xstart_um;
+                    file_deets('z start um')=gt.zstart_um;
+                case('dots')
+                    file_deets('dot spacing z um')=gt.zlocs
+                    file_deets('bar spacing x um')=gt.x
+                    file_deets('x start um')=gt.xstart_um;
+                    file_deets('z start um')=gt.zstart_um;
+            end
+
     end
     slice_out = gray2imagejfire(slice_op(xhat)/pmax);
+    xy_out = gray2imagejfire(xyprojop(xhat/pmax));
+    xz_out = gray2imagejfire(xzprojop(xhat/pmax));
+    yz_out = gray2imagejfire(yzprojop(xhat/pmax));
+    
     file_deets('processed_from_file')=from_file;
     file_deets('volume psnr')=cur_psnr;
+    
     imwrite(slice_out,[slicefile,'.png']);
     containers2file([slicefile,'.txt'],file_deets);
+    
+    imwrite(xy_out,[xyproj,'.png']);
+    containers2file([xyproj,'.txt'],file_deets);
+    imwrite(yz_out,[yzproj,'.png']);
+    containers2file([yzproj,'.txt'],file_deets);
+    imwrite(xz_out,[xzproj,'.png']);
+    containers2file([xzproj,'.txt'],file_deets);
 end
 fclose('all')
 

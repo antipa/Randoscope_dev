@@ -410,7 +410,7 @@ surfuni = make_outim(imresize(surfs_in.Tunifocalnonuniform,[1024,1024]),'parula'
 %surfrand = make_outim(imresize(surfs_in.Tnoaber_multi_mid,[1024,1024]),'parula',smax);
 surfopt = make_outim(imresize(surfs_in.Toptimized,[1024,1024]),'parula',smax);
 surfworst = make_outim(imresize(surf_worst_in.Tworst_init,[1024,1024]),'parula',smax);
-abersopt = make_outim(imresize(3e-3+surfs_in.Toptimized - surfs_in.Tmultifocalnonuniform,[1024,1024]),'parula',smax);
+abersopt = make_outim(imresize(surfs_in.Toptimized - surfs_in.Tmultifocalnonuniform,[1024,1024]),'parula',smax)
 imshow(surfrand)
 
 imwrite(surfreg,[outpth,sprintf('\\regular_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
@@ -418,7 +418,6 @@ imwrite(surfuni,[outpth,sprintf('\\unifocal_surface_%g_um_FoV_cmax_%g_um.png',(r
 %imwrite(surfrand,[outpth,sprintf('\\multifocal_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
 imwrite(surfopt,[outpth,sprintf('\\optimized_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
 imwrite(surfworst,[outpth,sprintf('worst_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
-imwrite(abersopt,[outpth,sprintf('optimized_abers_%g_um_FoV_cmax_%g_cmin_%g.png',(r2-r1)*px_srf*2,1/2*smax*1e3,1/2*smax*1e3)])
 imagesc(surfworst)
 %% Make axial correlation plots for resolution analysis
 
