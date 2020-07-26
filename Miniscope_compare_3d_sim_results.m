@@ -1,6 +1,7 @@
 %gt = load('D:\Randoscope\dataforrebuttal\newpsf\3D_recons\zebrafish_gt_5pct_512x512x60')
-test_dir = 'D:\Randoscope\dataforrebuttal\newpsf\3D_recons\20200714_002550_dots\'
+test_dir = 'D:\Randoscope\dataforrebuttal\newpsf\3D_recons\20200714_165924_axial_usaf\'
 
+obj_type = 'usaf'; %(dots or usaf)
 uni_file = uigetfile([test_dir,'*uni*'],'select unifocal');
 reg_file = uigetfile([test_dir,'*regular*'],'select regular');
 rand_file = uigetfile([test_dir,'*random*'],'select random multifocal');
@@ -125,6 +126,8 @@ psnr(double(xhat_rand.xhat_best(:,:,zstart:end)),gt_obj(:,:,zstart:end),1000)
 
 %% Prepare images for writing
 dtstamp = datestr(datetime('now'),'YYYYmmDD_hhMMss');
+analysis_dir = [test_dir,dtstamp,'_analysis_output\'];
+mkdir(analysis_dir);
 
 %%
 px = 4.541;  %Pixel size in microns/pixel in sensor space
@@ -138,11 +141,11 @@ design_list = {'reg','worst_rand','opt','uni','gt'};
 xyprojop = @(x)squeeze(max(x,[],3));
 yzprojop = @(x)squeeze(max(x,[],2));
 xzprojop = @(x)squeeze(max(x,[],1));
-obj_type = 'dots';
+
 for n = 1:numel(design_list)
     file_deets = containers.Map({'pixel_size_microns','z_spacing_microns','max_value','photon_max_count','design'},...
         {px_obj,dz,pmax,1000,design_list{n}});
-    filebase = [test_dir,dtstamp,'_',design_list{n}];
+    filebase = [analysis_dir,dtstamp,'_',design_list{n}];
     slicefile = [filebase,'_xz_slice'];
     xyproj = [filebase,'_xy_maxproj'];
     yzproj = [filebase,'_yz_maxproj'];
@@ -184,13 +187,15 @@ for n = 1:numel(design_list)
 
     end
     slice_out = gray2imagejfire(slice_op(xhat)/pmax);
+    slice_psnr = psnr(slice_op(gt.stackout/max(gt.stackout(:)))*1000,...
+        double(slice_op(xhat)),1000);
     xy_out = gray2imagejfire(xyprojop(xhat/pmax));
     xz_out = gray2imagejfire(xzprojop(xhat/pmax));
     yz_out = gray2imagejfire(yzprojop(xhat/pmax));
     
     file_deets('processed_from_file')=from_file;
     file_deets('volume psnr')=cur_psnr;
-    
+    file_deets('slice psnr') = slice_psnr;
     imwrite(slice_out,[slicefile,'.png']);
     containers2file([slicefile,'.txt'],file_deets);
     

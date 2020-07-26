@@ -1,0 +1,18 @@
+%function mu = power_iters(A,sz);
+A = @(x)Aadj_3d(A3d(x));
+sz = [Ny, Nx, Nz];
+bk = gpuArray(single(randn(sz)));
+k = 0;
+maxiter = 100
+mu = gpuArray(zeros(1,maxiter));
+resid = 1e10
+while resid > 10 && k<=maxiter
+    k = k+1;
+   Abk =  A(bk);
+   mu(k) = transpose(bk(:))*Abk(:)/(norm(bk(:))^2);
+   bknorm = norm(bk(:));
+   bk = bk/bknorm;
+   plot(mu)
+   drawnow
+   
+end

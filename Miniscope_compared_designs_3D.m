@@ -1,5 +1,5 @@
 %Load impulse response stack, h
-design_cells = {'worst_random'}    %Options: {'random_multifocal','optimized','worst_random','uni','regular'}
+design_cells = {'gaussian'}    %Options: {'random_multifocal','optimized','worst_random','uni','regular'}
 test_obj = 'dots';   %Options: 'dots' or 'axial_usaf';
 psf_folder = 'D:\Randoscope\dataforrebuttal\newpsf\';
 dtstamp = datestr(datetime('now'),'YYYYmmDD_hhMMss');
@@ -16,7 +16,7 @@ mkdir(savepath)
 
 h1 = figure(1);clf
 options.fighandle = h1;
-options.stepsize = 2e-2;
+
 options.convTol = 8.2e-12;
 
 options.maxIter = 3000;
@@ -25,7 +25,7 @@ options.residTol = .2;
 options.momentum = 'nesterov';
 options.disp_figs = 1;
 options.disp_fig_interval = 100;   %display image this often
-options.print_interval = 50;
+options.print_interval = 10;
 boundary_condition = 'pad';
 nocrop = @(x)x;
 options.disp_crop = @(x)gather(real(sum(x,3)));
@@ -64,6 +64,10 @@ for regidx = 1:numel(reg_list)
                 psf_file = 'psf_worstInit_ds';
                 h_in = load([psf_folder,psf_file]);
                 ht = permute(h_in.psf_worstInit_ds,[2 3 1]);
+            case('gaussian')
+                psf_file = 'diffuser_512x512x72.mat';
+                h_in = load([psf_folder,psf_file]);
+                ht = h_in.psf_stack;
         end
         
         
@@ -113,6 +117,9 @@ for regidx = 1:numel(reg_list)
         % Define handle for A adjoint
         Aadj_3d = @(x)A_adj_lensless_3d_v3(Hconj,x,crop,pad);
         
+        maxeig = power_iters(@(x)Aadj_3d(A3d(x)), [NY, NX, NZ])
+        options.stepsize = 1/maxeig
+        
         
         % Make or load sensor measurement
         meas_type = 'simulated';
@@ -135,7 +142,7 @@ for regidx = 1:numel(reg_list)
                 bin = double(imread([im_dir,imfname]));
                 b = gpuArray(imresize(bin,1/2*ds,'box'));
         end
-        %%
+        
         % Define gradient handle
         GradErrHandle = @(x)linear_gradient_b(x,A3d,Aadj_3d,b);
         

@@ -1,17 +1,44 @@
 %%
 pth = 'D:\Randoscope\dataforrebuttal\newpsf';
-uni_file = [pth,'\psf_worstInit_ds.mat'];
-in = load(uni_file);
-psf_stack_uni = permute((in.psf_worstInit_ds), [2 3 1]);
+uni_file = [pth,'\psf_uni_ds.mat'];
+in_uni = load(uni_file);
+psf_stack_uni = permute((in_uni.psf_noaber_uni_mid_ds), [2 3 1]);
 
 rando_file = [pth,'\psf_aber_ds.mat'];
-in = load();
+in_rando = load(rando_file);
 %psf_stack_rando = permute(in.psf_montebest_ds, [2 3 1]);
-psf_stack_rando = permute((in.psf_aber_ds), [2 3 1]);
+psf_stack_rando = permute((in_rando.psf_aber_ds), [2 3 1]);
 
-reg_file = [pth,'\psf_reg_ds.mat'];
-in = load();
-psf_stack = permute((in.psf_noaber_reg_mid_ds), [2 3 1]);
+px = 4.541;  %Pixel size in microns/pixel in sensor space
+Mag = 5.2;   %Magnification
+px_obj = px/Mag;   %Object space microns/pixel
+[Ny,Nx,Nz] = size(psf_stack_rando);
+dz = 5;   %Slice spacing in microns (object space)
+%%
+third_psf = 'gaussian'
+switch lower(third_psf)
+    case('regular')
+        reg_file = [pth,'\psf_reg_ds.mat'];
+
+        in = load(reg_file);
+        psf_stack = permute((in.psf_noaber_reg_mid_ds), [2 3 1]);
+    case('gaussian')
+        reg_file = [pth,'\diffuser_f=10_ALL_512x512.mat']
+        in = load(reg_file);
+        
+        dz_g = mean(diff(in.zgrid));
+        zmin = 0;
+        zmax = dz * Nz;
+        zmax_px_g = round(zmax/dz_g/1e3);
+        psf_stack = in.zstack(:,:,1:zmax_px_g);
+        
+        psf_permute = permute(psf_stack,[2 3 1]);   %Resize along dim 2
+        p
+        
+        % resample gaussian to have correct z spacing
+end
+
+
 
 %%
 h6 = figure(6),clf
@@ -28,11 +55,7 @@ ripple_uni = []
 % fc = 2*NA/lambda
 % Rayleigh = 3.5 = .61 lambda/NA
 
-px = 4.541;  %Pixel size in microns/pixel in sensor space
-Mag = 5.2;   %Magnification
-px_obj = px/Mag;   %Object space microns/pixel
-[Ny,Nx] = size(psf_stack_rando(:,:,1));
-dz = 5;   %Slice spacing in microns (object space)
+
 R = 3.5;
 lambda = 0.51;
 NA = .61*lambda/R;
@@ -410,14 +433,15 @@ surfuni = make_outim(imresize(surfs_in.Tunifocalnonuniform,[1024,1024]),'parula'
 %surfrand = make_outim(imresize(surfs_in.Tnoaber_multi_mid,[1024,1024]),'parula',smax);
 surfopt = make_outim(imresize(surfs_in.Toptimized,[1024,1024]),'parula',smax);
 surfworst = make_outim(imresize(surf_worst_in.Tworst_init,[1024,1024]),'parula',smax);
-abersopt = make_outim(imresize(surfs_in.Toptimized - surfs_in.Tmultifocalnonuniform,[1024,1024]),'parula',smax)
+abersopt = make_outim(imresize(3e-3+surfs_in.Toptimized - surfs_in.Tmultifocalnonuniform,[1024,1024]),'parula',smax);
 imshow(surfrand)
 
-imwrite(surfreg,[outpth,sprintf('\\regular_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
-imwrite(surfuni,[outpth,sprintf('\\unifocal_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
-%imwrite(surfrand,[outpth,sprintf('\\multifocal_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
-imwrite(surfopt,[outpth,sprintf('\\optimized_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
-imwrite(surfworst,[outpth,sprintf('worst_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
+% imwrite(surfreg,[outpth,sprintf('\\regular_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
+% imwrite(surfuni,[outpth,sprintf('\\unifocal_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
+% %imwrite(surfrand,[outpth,sprintf('\\multifocal_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
+% imwrite(surfopt,[outpth,sprintf('\\optimized_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
+% imwrite(surfworst,[outpth,sprintf('worst_surface_%g_um_FoV_cmax_%g_um.png',(r2-r1)*px_srf*2,smax*1e3)])
+% imwrite(abersopt,[outpth,sprintf('optimized_abers_%g_um_FoV_cmax_%g_cmin_%g.png',(r2-r1)*px_srf*2,1/2*smax*1e3,1/2*smax*1e3)])
 imagesc(surfworst)
 %% Make axial correlation plots for resolution analysis
 
@@ -557,7 +581,7 @@ opt_out = containers.Map(key_dict,{rando_file,dz,cmax});
 reg_out = containers.Map(key_dict,{reg_file,dz,cmax});
 badrand_out = containers.Map(key_dict,{uni_file,dz,cmax});
 
-bad_file = [pth,'\',dtstamp,'_worst_multifocal_coherence'];
+bad_file = [pth,'\',dtstamp,'_unifocal_coherence'];
 opt_file = [pth,'\',dtstamp,'_optimized_coherence'];
 reg_file = [pth,'\',dtstamp,'_regular_coherence'];
 
